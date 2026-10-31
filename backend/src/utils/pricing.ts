@@ -43,12 +43,12 @@ export interface PricingResult {
 
 const MAX_DATABASE_INT = 2_147_483_647n;
 
-function asBigInt(value: number, field: string): bigint {
+export function asBigInt(value: number, field: string): bigint {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error(`${field} must be a non-negative safe integer`);
   return BigInt(value);
 }
 
-function asDatabaseInt(value: bigint, field: string): number {
+export function asDatabaseInt(value: bigint, field: string): number {
   if (value < 0n || value > MAX_DATABASE_INT) throw new Error(`${field} exceeds the supported database money range`);
   return Number(value);
 }

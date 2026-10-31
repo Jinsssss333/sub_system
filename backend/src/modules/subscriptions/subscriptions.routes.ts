@@ -119,4 +119,3 @@ meSubscriptionsRouter.get(
   validate(subscriptionParamsSchema),
   getSubscriptionByIdHandler
 );
-

@@ -34,6 +34,3 @@ export async function number(
   const key = prefix === 'SUB' ? 'subscription' : 'invoice';
   return getNextSequenceNumber(prefix, key, tx);
 }
-
-
-

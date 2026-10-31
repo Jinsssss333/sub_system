@@ -1,105 +1,109 @@
-# 🧑‍💻 Person 2 Guide: Subscription Lifecycle Owner
+# Person 2: Subscription flow
 
-> **Domain:** Quotation Templates, Subscriptions Creation, Lifecycle State Machine, Pause/Resume/Renew Policies, and Date Clamping Math.  
-> **Git Branch:** `feature/subscriptions`  
-> **Source of Truth:** [`Brightloop Logic Architecture and Implementation Handoff.md`](./Brightloop%20Logic%20Architecture%20and%20Implementation%20Handoff.md)
+Three-hour hackathon scope. Build on existing code; no architecture rewrite. Prioritize the complete quote-to-invoice journey over optional lifecycle features. Earlier six-hour scheduling is superseded.
 
----
+## Ownership and dependency
 
-## 📂 Files You Own & Touch
+- **Branch:** `feature/subscriptions`.
+- **Own:** subscription routes/service, date utility and numbering utility.
+- **Do not edit:** Prisma schema, backend app registration, auth, invoices or frontend. Person 1 integrates your exported router and approved schema requests.
+- **Share immediately:** router export, sample request/response and date/numbering helper signatures.
+
+## Frozen contract
+
+```text
+Base /api; Bearer JWT
+Money integer paise; dates YYYY-MM-DD
+Success { data }; list { data, meta: { page, pageSize, total } }
+Error { error: { code, message, fields? } }
 ```
-backend/src/
-├── modules/
-│   ├── templates/          <-- Quotation template CRUD & line copy logic
-│   └── subscriptions/      <-- Subscription lifecycle, state transitions & actions
-└── utils/
-    ├── dates.ts            <-- Period math & month-end anchor date clamping
-    └── numbering.ts        <-- Sequential SUB-000123 generation
+
+Use existing compatible names. Person 1 supplies safe `actor`/`user` identity and role middleware; agree which request property is used.
+
+## Must ship endpoints
+
+| Endpoint | Behavior |
+| --- | --- |
+| GET /subscriptions | Admin/staff list; q, status, page, pageSize |
+| POST /subscriptions | Create DRAFT and server-priced lines |
+| GET /subscriptions/:id | Detail with plan, customer, readable product/variant labels and line snapshots |
+| POST /subscriptions/:id/transition | Body `{ to }`; enforce strict state chain |
+| GET /me/subscriptions | Customer-owned list only |
+| GET /me/subscriptions/:id | Customer-owned detail only |
+
+Return `nextInvoiceDate` so Person 4 can pass the intended billing period to Person 3. Never expose product cost prices in customer payloads.
+
+```json
+{
+  "customerId": "<customer UUID>",
+  "planId": "<plan UUID>",
+  "startDate": "2026-10-31",
+  "paymentTermDays": 14,
+  "lines": [
+    { "productId": "<UUID>", "variantId": "<UUID or null>", "quantity": 2, "taxId": "<UUID or null>" }
+  ]
+}
 ```
-> ⚠️ **No-Touch Rule:** Do not edit `schema.prisma` directly (ask Person 1 if DB changes are needed). Do not touch `modules/auth/`, `modules/invoices/`, or `frontend/`.
 
----
+Use the current business date in the demo, not the sample date literally. Optional expiry may remain if already supported. Do not accept client unitPrice, amount or total.
 
-## 🎯 Core Features & Endpoints to Build
+## Mandatory business logic
 
-### 1. Quotation Templates Module (`src/modules/templates/`)
-* **`POST /api/templates`**:
-  - Creates a reusable quote template with `name`, `planId`, `validityDays`, and `lines` (products, variants, quantities).
-* **`GET /api/templates`**:
-  - Lists available quotation templates for sales reps.
+```text
+DRAFT → QUOTATION → CONFIRMED → ACTIVE → CLOSED
+```
 
-### 2. Subscriptions Management Module (`src/modules/subscriptions/`)
-* **`POST /api/subscriptions`**:
-  - Creates a new subscription either from scratch or from a `templateId`.
-  - Generates atomic human number: `SUB-000123` via `numbering.ts`.
-  - Sets `status = DRAFT`.
-  - If built from a template: copies product lines and sets `expiryDate = today + validityDays`.
-* **`GET /api/subscriptions`**:
-  - Paginated list (`?page=1&pageSize=20&status=ACTIVE&customerId=...`).
-* **`GET /api/subscriptions/:id`**:
-  - Detailed view with lines, plan, customer, and attached discounts.
-* **`PATCH /api/subscriptions/:id`**:
-  - Edits permitted **only while status is DRAFT**. If status is not DRAFT, return HTTP 409 Conflict.
+- **Create:** require existing customer, available plan, active products, variant belonging to product, valid tax and quantity at least plan minimum.
+- **Snapshot:** `unitPrice = salesPrice + variant.extraPrice`; `amount = unitPrice × quantity`, with safe bounds.
+- **Quotation:** require at least one line. Retain separate quotation validity logic if it exists.
+- **Confirmation:** validate minimum quantities and any quotation expiry. Do not allow catalog changes to silently reprice confirmed lines.
+- **Activation:** atomically change status and set nextInvoiceDate to startDate. Reject stale/illegal transitions with 409.
+- **Closure:** ACTIVE → CLOSED clears nextInvoiceDate; leave outstanding invoices untouched.
+- **Edits:** if existing draft edit is retained, block edits after DRAFT. Do not add a full editing system if it delays integration.
+- **Concurrency:** conditional state update or row lock so requests cannot both act on stale state.
+- **Ownership:** customer queries include JWT-derived customerId; another customer's record returns 404.
 
-### 3. State Machine & Transitions (`POST /api/subscriptions/:id/transition`)
-Enforce the strict allowed-transitions map:
-$$\text{Draft} \longrightarrow \text{Quotation} \longrightarrow \text{Confirmed} \longrightarrow \text{Active} \longrightarrow \text{Closed}$$
+Correct the earlier guide's expiry instruction: template validity is quotation expiry, NOT subscription service expiry. If templates are deferred, no new expiry field is needed just for this demo.
+
+## Date and numbering helpers
+
+Share one helper with Person 3:
 
 ```typescript
-const allowedTransitions = {
-  DRAFT: ['QUOTATION'],
-  QUOTATION: ['CONFIRMED'],
-  CONFIRMED: ['ACTIVE'],
-  ACTIVE: ['CLOSED'],
-  CLOSED: [],
-};
+nextPeriod(periodStart: Date, billingPeriod: string, anchor: Date): Date
+number(tx: Prisma.TransactionClient, prefix: 'SUB' | 'INV'): Promise<string>
 ```
-* **Side Effects per Transition:**
-  - `DRAFT` $\rightarrow$ `QUOTATION`: Requires at least one line item.
-  - `QUOTATION` $\rightarrow$ `CONFIRMED`: Validate line quantities $\ge$ `plan.minQuantity`. Lock prices.
-  - `CONFIRMED` $\rightarrow$ `ACTIVE`: Set `nextInvoiceDate = startDate`.
-  - `ACTIVE` $\rightarrow$ `CLOSED`: Clear `nextInvoiceDate` (stops billing engine from picking it up).
-  - *Any invalid transition must return HTTP 409 Conflict.*
 
-### 4. Lifecycle Actions (Pause, Resume, Renew)
-* **`POST /api/subscriptions/:id/pause`**:
-  - Allowed only if `plan.pausable == true`.
-  - Sets `pausedAt = today`. (Billing engine will automatically skip paused subscriptions).
-* **`POST /api/subscriptions/:id/resume`**:
-  - Allowed only if currently paused. Clears `pausedAt = null`.
-* **`POST /api/subscriptions/:id/renew`**:
-  - Allowed only if `plan.renewable == true`.
-  - Clones the existing subscription into a fresh `DRAFT` linked via `renewedFromId`. Original remains untouched.
+- DAILY/WEEKLY add calendar days; MONTHLY/YEARLY clamp safely.
+- Preserve original anchor: Jan 31 → Feb 28/29 → Mar 31.
+- Atomic counter increment and number creation belong in the caller's transaction.
+- Export these functions early; do not block Person 3 while polishing the module.
 
-### 5. Date Clamping Utility (`src/utils/dates.ts`)
-* Implement billing period addition with **calendar date clamping**:
-  - E.g., Jan 31 + 1 month = Feb 28 (or 29 in leap year).
-  - Retain the original anchor date so subsequent cycle reverts to March 31.
+## Defer unless already working
 
-### 6. Customer Portal Scoping
-* **`GET /api/me/subscriptions`**:
-  - Scoped strictly to `where customerId = req.user.customerId`.
+- Quotation template CRUD and template-copy UI.
+- Pause/resume/renewal and proration; hide unsupported controls.
+- Advanced expiration/auto-close orchestration and scheduled status sweeps.
+- Discount attachment management.
 
----
+If pause/resume already works, keep it but confirm its billing policy with Person 3. Never clear a pause and accidentally back-bill skipped time.
 
-## ⏱️ Hour-by-Hour 6-Hour Plan
-* **Hour 1 (0:00 – 1:00):** Implement date clamping functions in `dates.ts` and test end-of-month edge cases.
-* **Hour 2 (1:00 – 2:00):** Build Quotation Templates CRUD and Template-to-Subscription line copy logic.
-* **Hour 3 (2:00 – 3:00):** Build the Subscription State Machine and transition validator.
-* **Hour 4 (3:00 – 4:00):** Build Pause, Resume, and Renew cloning endpoints. Add `/api/me/subscriptions`.
-* **Hour 5 (4:00 – 4:45):** **MERGE POINT:** Open Pull Request from `feature/subscriptions` into `dev`.
-* **Hour 6 (4:45 – 6:00):** Assist Person 3 (Billing) and Person 4 (Frontend) in testing the complete Quote-to-Active flow.
+## Timeline from now
 
----
+| Time | Deliverable |
+| --- | --- |
+| 0–10 min | Agree contracts and pricing with team; inspect foundations |
+| 10–35 min | Export numbering/date helpers; subscription list/detail shapes |
+| 35–70 min | Create DRAFT with validated snapshots; lifecycle transitions |
+| 70–95 min | Customer-owned list/detail; test with Person 4 and billing owner |
+| 95–145 min | Complete end-to-end flow and fix integration defects |
+| 145–180 min | Freeze features; rehearse create → quote → confirm → activate |
 
-## 🔍 Edge Cases You Must Guard Against
-1. **Illegal State Jump:** Attempting to jump from `DRAFT` directly to `ACTIVE` must fail with HTTP 409.
-2. **Editing Post-Draft:** Attempting to edit line items on an `ACTIVE` subscription must be rejected.
-3. **Minimum Quantity:** Ensure line quantity cannot be lower than the plan's `minQuantity`.
-4. **Customer Isolation:** Customers querying another company's subscription ID must receive HTTP 404.
+## Acceptance
 
----
-
-## 🎤 What You Explain to Hackathon Judges
-> *"I built the Subscription Engine and State Machine. Our system enforces strict, deterministic transitions from Draft Quote to Active Service. I handled edge-case calendar date clamping so renewals never drift, and implemented plan policy flags so only eligible plans can be paused or renewed. When a subscription is renewed, we preserve full audit history by cloning into a new Draft linked via parent pointers."*
-
+- DRAFT → ACTIVE jump returns 409.
+- Quantity below minimum fails; Odoo delta is applied server-side.
+- Confirmed line prices do not change when catalog prices change.
+- Activation creates a due billing date.
+- Customer cannot inspect another subscription.
+- Person 3 generates an invoice from your ACTIVE record without manual DB edits.

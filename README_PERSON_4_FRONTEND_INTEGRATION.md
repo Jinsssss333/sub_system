@@ -1,111 +1,114 @@
-# 🎨 Person 4 Guide: Frontend & Integration Owner
+# Person 4: Polished frontend and demo integration
 
-> **Domain:** Complete React Frontend UI, Design System, Multi-Role Views, TanStack Query Integration, Print Invoices, Browser Acceptance, and Live Demo Pitch Lead.  
-> **Git Branch:** `feature/frontend-integration`  
-> **Source of Truth:** [`Brightloop Logic Architecture and Implementation Handoff.md`](./Brightloop%20Logic%20Architecture%20and%20Implementation%20Handoff.md)
+Three-hour hackathon scope. Aim for an industry-style, demo-ready experience, not a production-grade claim. Reuse existing components and connect to real APIs from the first hour.
 
----
+## Ownership and design
 
-## 📂 Files You Own & Touch
+- **Branch:** `feature/frontend-integration`.
+- **Own:** frontend only; send backend contract issues to the relevant owner.
+- **Keep stack:** React/Vite/TypeScript/Tailwind, existing Router/query/forms foundations. Do not change libraries for cosmetic reasons.
+- **Style:** indigo `#4F46E5`, slate surfaces, system fonts, restrained borders, consistent spacing, semantic status badges.
+- **Shell:** one responsive sidebar/topbar, page heading, reusable table/card, form modal, toast and confirmation dialog.
+- **No dead buttons:** hide unfinished actions. No dummy finance values in the final demo.
+
+## Must ship screens, in priority order
+
+| Screen | Required behavior |
+| --- | --- |
+| Login | Seeded real sign-in; loading and bad-password feedback |
+| Dashboard | Four live KPI cards; overdue/recent invoice list; useful navigation |
+| Subscriptions | Search/status/pagination; create form; readable detail; legal lifecycle buttons |
+| Invoice detail/list | Stored lines/taxes/totals, status, balance and receipt history |
+| Record payment modal | Method/date/amount; prefill balance; partial/full updates |
+| Catalog | Products/variants/plans; simple create forms if endpoints ready |
+| Customers | Search/list and simple create form |
+| Customer view | Own subscriptions/invoices using owned endpoints, not UI-only filtering |
+
+Build the core journey before adding optional screens. Staff and admin can share operational pages with appropriate controls rather than separate duplicated dashboards.
+
+## Contract with backend owners
+
+```text
+API base /api; Authorization: Bearer <JWT>
+Money integer paise; currency formatter divides by 100
+Rates integer basis points; percentage display divides by 100
+Dates YYYY-MM-DD
+Success { data }; lists { data, meta: { page, pageSize, total } }
+Error { error: { code, message, fields? } }
 ```
-frontend/
-├── src/
-│   ├── api/
-│   │   └── client.ts         <-- Fetch wrapper with Bearer token & error mapping
-│   ├── components/           <-- Reusable Badges, Modals, Tables, Metric Cards
-│   ├── layouts/              <-- App Shell, Sidebar, Topbar with Role Switcher
-│   ├── pages/
-│   │   ├── admin/            <-- Products, Variants, Plans, Discounts manager
-│   │   ├── staff/            <-- Subscriptions list/detail, Invoices, Payment modal
-│   │   ├── customer/         <-- Customer Self-Service Portal (My Subs, My Invoices)
-│   │   └── finance/          <-- Finance Lead KPI Dashboard & Overdue Table
-│   ├── App.tsx               <-- Routing and Role Guard setup
-│   └── index.css             <-- Tailwind styles and @media print CSS
-```
-> ⚠️ **No-Touch Rule:** Do not edit `backend/` files. Connect to backend endpoints via `/api/*`.
 
----
+- **Person 1:** login/me; GET/POST customers/products/plans; variants and taxes.
+- **Person 2:** subscription create/list/detail and transition; owned subscription endpoints.
+- **Person 3:** generate invoice, invoice detail/list/confirm, payments, owned invoices, summary and overdue.
+- **Period-aware generate:** pass `{ periodStart: subscription.nextInvoiceDate.slice(0,10) }` to `POST /subscriptions/:id/invoices`. Store the returned invoice ID, invalidate subscription data and navigate to its detail.
+- **Contract freeze:** confirm actual payload examples in the first ten minutes. Adapt to compatible existing endpoints instead of demanding rewrites.
 
-## 🎯 Core Views & Components to Build
+Search/filter/page live in URL query params; debounce search around 300 ms. If existing helpers differ, reuse them consistently.
 
-### 1. App Shell & Navigation (`src/layouts/`)
-* **Sidebar:** Left navigation that adapts dynamically based on active role:
-  - **Admin:** Catalog, Plans, Discounts, Users, Finance Dashboard.
-  - **Staff:** Subscriptions, Invoices, Payments, Customers.
-  - **Customer:** My Subscriptions, My Invoices, Profile.
-* **Topbar:** Top bar with a **Live Role Switcher button group (Admin | Staff | Customer)** so hackathon judges can toggle perspectives in one click.
+## Critical interactions
 
-### 2. Status Badges & Design Tokens (`src/components/`)
-* **Color Palette:** Primary Indigo (`#4F46E5`), Slate neutrals, Emerald for Paid/Active, Amber for Confirmed, Rose for Overdue/Cancelled.
-* **Subscription Status Badges:**
-  - `DRAFT`: Gray
-  - `QUOTATION`: Blue
-  - `CONFIRMED`: Amber
-  - `ACTIVE`: Emerald
-  - `CLOSED`: Slate
-* **Currency Formatter:** Display paise formatted in Indian Rupees:
-  ```typescript
-  export const formatINR = (paise: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
-  ```
+- **Subscription form:** customer, plan, dates/terms and repeatable product/variant/quantity/tax lines. Send IDs/quantity only; display server-calculated prices after save.
+- **Lifecycle:** DRAFT → QUOTATION → CONFIRMED → ACTIVE. Only render the legal next action.
+- **Generate invoice:** visible for active, unpaused due subscriptions. Disable during request.
+- **Confirmation:** invoice DRAFT → CONFIRMED before collecting payments.
+- **Payment:** display current balance; submit positive integer paise; handle server overpayment errors; only full settlement becomes PAID.
+- **Mutations:** await server result, invalidate detail/list/dashboard queries, then show contextual feedback.
+- **Role boundaries:** hiding an action is UX, not security; backend must independently reject it.
+- **Customer isolation:** use `/me/subscriptions` and `/me/invoices`; never download all customers' data and filter in React.
 
-### 3. Admin Catalog Views (`src/pages/admin/`)
-* **Products & Variants Table:**
-  - Shows products, prices, and variants.
-  - Highlight variant: **Odoo Edition (+₹560.00)**.
-* **Plans Manager:**
-  - Displays Monthly/Yearly plans, billing frequency, and policy badges (`closable`, `pausable`, `renewable`, `autoClose`).
+## Role switching correction
 
-### 4. Staff Operations Views (`src/pages/staff/`)
-* **Subscriptions Table & Detail Page:**
-  - List with search, status filters, and pagination.
-  - Detail page with line items, totals, and **contextual transition buttons**:
-    - *"Submit Quote"*, *"Approve & Confirm"*, *"Activate Subscription"*, *"Pause"*, *"Renew"*.
-    - Show confirm dialogs for destructive actions.
-* **Invoices & Payments Modal:**
-  - Invoices list showing due date and status.
-  - Detail page with **"Record Payment" modal**:
-    - Select Payment Method (`UPI`, `CARD`, `CASH`, `BANK_TRANSFER`, `CHEQUE`).
-    - Input amount (pre-filled with remaining balance).
-    - Submitting automatically updates remaining balance and flips badge to `PAID`.
+Do NOT merely change a role variable in the topbar. That does not change server authorization.
 
-### 5. Customer Self-Service Portal (`src/pages/customer/`)
-* **My Subscriptions:** Clean, customer-facing card view showing their active plans.
-* **My Invoices:** List of past and current invoices with a **"Print / Download"** button.
-* **Customer Isolation:** Verify when logged in as `customer@brightloop.test`, no data from other customers is visible.
+For the demo, sign out and log in using seeded accounts. A development-only quick-login button is acceptable only if it performs a real authentication request and replaces the session/query cache. Never ship credentials as a production feature.
 
-### 6. Finance Lead Dashboard (`src/pages/finance/`)
-* **4 Big Metric KPI Cards:**
-  1. **Active Subscriptions:** (e.g. `12 Subscribers`)
-  2. **Revenue Collected:** (e.g. `₹4,50,000.00`)
-  3. **Total Outstanding:** (e.g. `₹1,20,000.00`)
-  4. **Overdue Invoices:** (e.g. `3 Invoices`)
-* **Overdue Invoices Table:** Direct table with customer name, due date, amount, and quick action to follow up.
-* **Fast Load Guarantee:** TanStack Query auto-refreshes metrics in $<200\text{ms}$.
+## Polish checklist
 
-### 7. Printable Invoice View
-* Clean invoice layout with company header, line item table (gross, discount, tax, total), and `@media print` CSS so clicking **Print** produces a clean PDF directly in Chrome/Edge without extra dependencies.
+- Consistent headings, spacing, price alignment and concise labels.
+- Green ACTIVE/PAID; gray DRAFT; blue QUOTATION; amber CONFIRMED; rose overdue.
+- OVERDUE is derived from confirmed status and due date, not a new stored status.
+- Skeleton/loading, empty lists, API error/retry and inline form validation.
+- Searchable customer lookup beyond the first 100 records.
+- Disable duplicate submit; clear stale record data after account changes.
+- Keyboard focus, labelled fields, in-page confirm dialogs.
+- Check 1440px desktop and 375px mobile; stack wide tables and use a drawer.
+- No CDN fonts or runtime network assets required.
+- Do not guarantee automatic sub-200 ms refresh; verify requests and visible updates.
 
----
+## Defer unless already working
 
-## ⏱️ Hour-by-Hour 6-Hour Plan
-* **Hour 1 (0:00 – 1:00):** Set up layout shell with sidebar, topbar, and working Role Switcher. Test routing.
-* **Hour 2 (1:00 – 2:00):** Build Admin Catalog screen (Products, Odoo variant, Plans) and Status Badges.
-* **Hour 3 (2:00 – 3:00):** Build Staff Subscriptions list/detail and the *"Record Payment"* modal with instant balance update.
-* **Hour 4 (3:00 – 4:00):** Build Customer Portal views and Finance Dashboard KPI cards.
-* **Hour 5 (4:00 – 4:45):** **MERGE POINT:** Connect live API endpoints (`/api/*`), verify end-to-end flows, and format printable invoice.
-* **Hour 6 (4:45 – 6:00):** Rehearse and lead the **3-minute live pitch** for the judges!
+- Password reset/signup polish, team administration and profile editing.
+- Full discount/template managers, pause/resume/renew controls.
+- Advanced charts, animations, mail sending and broad report filters.
+- PDF generation libraries. If time remains, add browser print styling to the existing invoice view.
 
----
+Hide unsupported features rather than presenting a misleading working UI.
 
-## 🔍 Edge Cases You Must Guard Against
-1. **Never Show Blank Screens:** Use skeleton loaders while TanStack Query fetches.
-2. **Form Errors:** Map backend `error.fields` directly to inputs so forms show clear inline validation errors.
-3. **Invalid Actions:** Don't render a *"Confirm"* button on an invoice that is already `PAID`.
-4. **Mobile Responsive:** Verify table rows convert to readable cards on mobile width (<768px).
+## Timeline from now
 
----
+| Time | Deliverable |
+| --- | --- |
+| 0–15 min | Inspect current UI; freeze payloads; establish tokens and navigation |
+| 15–40 min | Real login, shell, dashboard layout, catalog/customer API options |
+| 40–75 min | Subscription create/list/detail and transitions using live API |
+| 75–110 min | Invoice generation/detail/confirmation and payment modal |
+| 110–135 min | Live KPIs, customer-owned views, responsive/error-state polish |
+| 135–150 min | Integrated smoke test; remove dead controls; feature freeze |
+| 150–180 min | Rehearse on the presentation laptop; fix blockers only |
 
-## 🎤 What You Explain to Hackathon Judges (Pitch Lead)
-> *"I designed our responsive UI and unified user experience across all three roles. We built a customer self-service portal where customers manage their own accounts with total data isolation, an operational console for staff to manage quotes and log payments, and an executive dashboard where the finance boss sees real-time revenue and overdue receivables instantly. Our UI is 100% bundled offline with zero external CDN dependencies."*
+Temporary fixtures during construction must be removed or clearly separated before the final demo. Never use static JSON as the apparent production data source.
 
+## Three-minute demo script
+
+1. Show dashboard totals from the database.
+2. Select customer/product/plan and the Odoo variant; create a subscription.
+3. Advance quotation → confirmed → active.
+4. Generate and confirm its invoice.
+5. Record a partial payment, then the remaining balance; show PAID and updated dashboard.
+6. Sign in as the customer; show only their own invoice/subscription.
+
+Use today's start date so billing is due. Keep a second seeded ACTIVE subscription and a confirmed unpaid invoice as fallback scenes, not fake responses.
+
+## Final acceptance
+
+The full flow must work after refresh using real records. Test another customer's ID rejection, invalid quantity and overpayment. On presentation day, describe only completed features; do not claim automated collection, scheduled billing, production readiness or measured speed unless actually implemented and verified.

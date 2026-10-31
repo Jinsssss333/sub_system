@@ -23,4 +23,14 @@ export async function getNextSubscriptionNumber(
   return getNextSequenceNumber('SUB', 'subscription', tx);
 }
 
-
+/**
+ * Shared helper requested by Person 3 (Billing):
+ * number(tx: Prisma.TransactionClient, prefix: 'SUB' | 'INV'): Promise<string>
+ */
+export async function number(
+  tx: Prisma.TransactionClient,
+  prefix: 'SUB' | 'INV'
+): Promise<string> {
+  const key = prefix === 'SUB' ? 'subscription' : 'invoice';
+  return getNextSequenceNumber(prefix, key, tx);
+}

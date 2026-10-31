@@ -416,8 +416,37 @@ async function main() {
     );
     console.log(`  ✔ Customer portal /api/me/subscriptions returned ${mySubsRes.body.data.length} scoped subscriptions`);
 
-    // --- PART 11: Active -> Closed Transition ---
-    console.log('\n▶ TEST 11: Closing Subscription (Clears nextInvoiceDate)');
+    // Customer Portal: /api/me/subscriptions/:id (Customer-owned detail)
+    const mySubDetailRes = await request(baseUrl, 'GET', `/api/me/subscriptions/${sub1.id}`, cust1Token);
+    assert(mySubDetailRes.status === 200, `Expected 200 for /api/me/subscriptions/${sub1.id}, got ${mySubDetailRes.status}`);
+    assert(mySubDetailRes.body.data.id === sub1.id, 'Expected customer detail to return matching subscription');
+    
+    // Invariant: Never expose product cost prices in customer payloads
+    for (const line of mySubDetailRes.body.data.lines) {
+      assert(line.product.costPrice === undefined, 'Security Invariant: product costPrice must NEVER be exposed in customer payloads');
+    }
+    console.log('  ✔ Customer portal detail /api/me/subscriptions/:id verified (costPrice hidden)');
+
+    // Foreign customer accessing /api/me/subscriptions/:id returns 404
+    const foreignMeDetailRes = await request(baseUrl, 'GET', `/api/me/subscriptions/${subRestricted.id}`, cust1Token);
+    assert(foreignMeDetailRes.status === 404, `Expected 404 on /api/me/subscriptions/:id for foreign sub, got ${foreignMeDetailRes.status}`);
+    console.log('  ✔ Customer portal /api/me/subscriptions/:id customer isolation verified (404)');
+
+    // --- PART 11: Person 3 Shared Helper Functions ---
+    console.log('\n▶ TEST 11: Person 3 Helper Function Signatures (nextPeriod & number)');
+    const { nextPeriod } = await import('../src/utils/dates.js');
+    const { number } = await import('../src/utils/numbering.js');
+    const testNextPeriod = nextPeriod(new Date('2026-01-31T00:00:00.000Z'), 'MONTHLY', new Date('2026-01-31T00:00:00.000Z'));
+    assert(testNextPeriod.toISOString().startsWith('2026-02-28'), 'nextPeriod should clamp Jan 31 to Feb 28');
+    
+    const invoiceNumber = await prisma.$transaction(async (tx) => {
+      return number(tx, 'INV');
+    });
+    assert(invoiceNumber.startsWith('INV-'), `Expected INV- prefix, got ${invoiceNumber}`);
+    console.log(`  ✔ Shared helpers nextPeriod and number verified (generated ${invoiceNumber})`);
+
+    // --- PART 12: Active -> Closed Transition ---
+    console.log('\n▶ TEST 12: Closing Subscription (Clears nextInvoiceDate)');
     const toClosedRes = await request(baseUrl, 'POST', `/api/subscriptions/${sub1.id}/transition`, staffToken, {
       to: 'CLOSED',
     });
@@ -426,7 +455,7 @@ async function main() {
     console.log('  ✔ Closed subscription cleared nextInvoiceDate');
 
     console.log('\n======================================================');
-    console.log('🎉 ALL 11 VERIFICATION TESTS PASSED SUCCESSFULLY! 100%');
+    console.log('🎉 ALL 12 VERIFICATION TESTS PASSED SUCCESSFULLY! 100%');
     console.log('======================================================\n');
   } finally {
     server.close();

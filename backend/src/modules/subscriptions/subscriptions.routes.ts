@@ -111,3 +111,11 @@ meSubscriptionsRouter.get(
   requireRole('CUSTOMER'),
   getMySubscriptionsHandler
 );
+
+meSubscriptionsRouter.get(
+  '/:id',
+  authMiddleware,
+  requireRole('CUSTOMER'),
+  validate(subscriptionParamsSchema),
+  getSubscriptionByIdHandler
+);

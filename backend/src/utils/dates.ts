@@ -98,8 +98,18 @@ export function calculatePeriodEnd(
   period: BillingPeriod,
   anchorDate?: Date
 ): Date {
-  const nextPeriod = addPeriod(periodStart, period, anchorDate);
-  return addDays(nextPeriod, -1);
+  const nextPeriodDate = addPeriod(periodStart, period, anchorDate);
+  return addDays(nextPeriodDate, -1);
 }
 
-
+/**
+ * Shared helper requested by Person 3 (Billing):
+ * nextPeriod(periodStart: Date, billingPeriod: string | BillingPeriod, anchor: Date): Date
+ */
+export function nextPeriod(
+  periodStart: Date,
+  billingPeriod: string | BillingPeriod,
+  anchor?: Date
+): Date {
+  return addPeriod(periodStart, billingPeriod as BillingPeriod, anchor);
+}

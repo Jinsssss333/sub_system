@@ -97,7 +97,7 @@ export function ProductsPage() {
           <TableMessage columns={cols}><EmptyState title="No products yet" /></TableMessage>
         ) : (
           list.data!.data.map((p) => (
-            <tr key={p.id} className="hover:bg-slate-50">
+            <tr key={p.id}>
               <td className="td"><p className="font-medium text-slate-900">{p.name}</p><p className="text-xs text-slate-500">{p.type}</p></td>
               <td className="td hidden whitespace-normal md:table-cell">
                 <div className="flex flex-wrap gap-1.5">

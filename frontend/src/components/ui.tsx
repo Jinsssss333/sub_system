@@ -22,8 +22,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
         type={type}
         disabled={disabled || loading}
         className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-60',
-          size === 'sm' ? 'h-8 px-3 text-xs' : 'h-10 px-4 text-sm',
+          'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition disabled:cursor-not-allowed disabled:opacity-60',
+          size === 'sm' ? 'h-8 px-2.5 text-xs' : 'h-9 px-3.5 text-sm',
           variants[variant],
           className,
         )}
@@ -104,11 +104,11 @@ export function SearchInput({ value, onChange, placeholder = 'Search…' }: { va
 // ── Layout primitives ───────────────────────────────────────────────────────
 export function PageHeader({ title, description, actions, back }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; back?: ReactNode }) {
   return (
-    <div className="mb-6">
+    <div className="mb-6 border-b border-slate-200 pb-5">
       {back}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">{title}</h1>
           {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -121,7 +121,7 @@ export function Card({ title, actions, children, className, bodyClassName }: { t
   return (
     <section className={cn('card', className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-3.5">
           <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
           {actions}
         </header>
@@ -134,13 +134,13 @@ export function Card({ title, actions, children, className, bodyClassName }: { t
 export function StatCard({ label, value, hint, icon, tone = 'primary' }: { label: string; value: ReactNode; hint?: ReactNode; icon: ReactNode; tone?: 'primary' | 'emerald' | 'amber' | 'rose' }) {
   const tones = { primary: 'bg-primary-50 text-primary-600', emerald: 'bg-emerald-50 text-emerald-600', amber: 'bg-amber-50 text-amber-600', rose: 'bg-rose-50 text-rose-600' };
   return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-slate-500">{label}</p>
-        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg', tones[tone])}>{icon}</span>
+    <div className="card flex items-start gap-4 p-5">
+      <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-md', tones[tone])}>{icon}</span>
+      <div className="min-w-0">
+        <p className="text-[13px] font-medium text-slate-500">{label}</p>
+        <p className="tabular mt-1 whitespace-nowrap text-[1.375rem] font-semibold leading-tight tracking-tight text-slate-900">{value}</p>
+        {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
       </div>
-      <p className="tabular mt-2 whitespace-nowrap text-2xl font-semibold tracking-tight text-slate-900 xl:text-[1.375rem] 2xl:text-2xl">{value}</p>
-      {hint && <p className="mt-3 text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }
@@ -178,7 +178,7 @@ const badgeLabels: Record<string, string> = { CONFIRMED: 'Confirmed', QUOTATION:
 export function StatusBadge({ status }: { status: string }) {
   const label = badgeLabels[status] ?? status.charAt(0) + status.slice(1).toLowerCase().replace('_', ' ');
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badgeTones[status] ?? badgeTones.DRAFT)}>
+    <span className={cn('inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset', badgeTones[status] ?? badgeTones.DRAFT)}>
       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
       {label}
     </span>
@@ -190,9 +190,9 @@ export function Table({ head, children, footer }: { head: ReactNode; children: R
   return (
     <div className="card overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50/80">{head}</thead>
-          <tbody className="divide-y divide-slate-100 bg-white">{children}</tbody>
+        <table className="min-w-full">
+          <thead>{head}</thead>
+          <tbody className="divide-y divide-slate-100 bg-white [&>tr:hover]:bg-slate-50/70">{children}</tbody>
         </table>
       </div>
       {footer}
@@ -231,7 +231,7 @@ export function Pagination({ page, pageSize, total, onPage }: { page: number; pa
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-white px-4 py-3 text-sm text-slate-600">
+    <div className="flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/60 px-4 py-2.5 text-sm text-slate-600">
       <p className="tabular">
         <span className="hidden sm:inline">Showing </span>
         {from.toLocaleString('en-IN')}–{to.toLocaleString('en-IN')} of {total.toLocaleString('en-IN')}
@@ -331,7 +331,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" onClick={onClose} aria-hidden />
-      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cn('relative flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-pop sm:rounded-2xl', widths[size])}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cn('relative flex max-h-[92vh] w-full flex-col rounded-t-xl bg-white shadow-pop sm:rounded-lg', widths[size])}>
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
           <div>
             <h2 id={titleId} className="text-base font-semibold text-slate-900">

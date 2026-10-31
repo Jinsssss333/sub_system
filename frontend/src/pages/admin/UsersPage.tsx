@@ -40,7 +40,7 @@ export function UsersPage() {
       <Table head={<tr><th className="th">Name</th><th className="th">Role</th><th className="th hidden md:table-cell">Company</th><th className="th hidden sm:table-cell">Joined</th></tr>} footer={list.data && <Pagination page={list.page} pageSize={list.pageSize} total={list.data.meta.total} onPage={list.setPage} />}>
         {list.isLoading ? <TableSkeleton columns={cols} /> : list.isError ? <TableMessage columns={cols}><ErrorState error={list.error} /></TableMessage> : list.data!.data.length === 0 ? <TableMessage columns={cols}><EmptyState title="No users found" /></TableMessage> : (
           list.data!.data.map((u) => (
-            <tr key={u.id} className="hover:bg-slate-50">
+            <tr key={u.id}>
               <td className="td"><p className="font-medium text-slate-900">{u.name}</p><p className="text-xs text-slate-500">{u.email}</p></td>
               <td className="td"><StatusBadge status={u.role} /></td>
               <td className="td hidden md:table-cell">{u.customer?.companyName ?? '—'}</td>

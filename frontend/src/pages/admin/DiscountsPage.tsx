@@ -99,7 +99,7 @@ export function DiscountsPage() {
           list.data!.data.map((d) => {
             const live = d.startDate.slice(0, 10) <= today && d.endDate.slice(0, 10) >= today && (d.usageLimit === null || d.timesUsed < d.usageLimit);
             return (
-              <tr key={d.id} className="hover:bg-slate-50">
+              <tr key={d.id}>
                 <td className="td whitespace-normal"><p className="font-medium text-slate-900">{d.name}</p><p className="text-xs text-slate-500">{d.scope === 'PRODUCT' ? `Products: ${d.products.map((p) => p.product.name).join(', ')}` : 'Whole subscription'}{d.minPurchase ? ` · min ${formatINR(d.minPurchase)}` : ''}</p></td>
                 <td className="td tabular text-right font-medium">{d.type === 'PERCENT' ? bpsToPercent(d.value) : formatINR(d.value)}</td>
                 <td className="td hidden md:table-cell">{formatDate(d.startDate)} – {formatDate(d.endDate)}</td>

@@ -117,7 +117,7 @@ export function InvoiceDetailPage() {
           </Link>
         }
         title={<span className="flex flex-wrap items-center gap-3">{inv.number}<StatusBadge status={overdue ? 'OVERDUE' : inv.status} /></span>}
-        description={<>For {inv.customer?.companyName ?? inv.customerName} · Subscription <Link to={subLink} className="font-medium text-primary-700 hover:underline">{inv.subscription?.number}</Link></>}
+        description={<>For {inv.customer?.companyName ?? inv.customerName} · Subscription <Link to={subLink} className="link">{inv.subscription?.number}</Link></>}
         actions={
           <>
             <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={() => print.mutate()} loading={print.isPending}>Print</Button>

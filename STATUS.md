@@ -152,7 +152,8 @@ frontend/vite.config.ts
 | --- | --- | --- |
 | 0 Foundation | existing, fixed | e24ec18 |
 | 1 Identity | existing, fixed | dc31025 |
-| 2 Catalog | existing, fixed + built (discounts) | see below |
+| 2 Catalog | existing, fixed + built (discounts) | c8bd88e |
+| 3 Subscriptions | existing, fixed | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -204,4 +205,28 @@ $ npm run typecheck      -> exit 0
 $ npx eslint .           -> exit 0, ✖ 30 problems (0 errors, 30 warnings)
 $ npm run build          -> exit 0
 $ npm test -w backend    -> Test Files 6 passed (6) | Tests 33 passed (33)
+```
+
+### Gate 3 — Subscriptions: existing, fixed
+
+Existing and kept: customers module, template copy, DRAFT→QUOTATION→CONFIRMED→ACTIVE→CLOSED map with side effects, pause/resume/renew, `/api/me/subscriptions`.
+Fixed:
+- Clients can no longer send `unitPrice`; every line is priced from the catalog (product + variant) and capped at ₹10,00,000 per line, max 10 lines. Inactive products/taxes rejected.
+- Ownership is now in the WHERE clause for subscription detail, pause/resume/renew, transitions and customer profiles (another customer's id → 404). Found and fixed a bug in my own first pass where `{ id, id: own }` would have returned the caller's own row.
+- Transitions, pause and resume use compare-and-set (`updateMany` on the expected status) so concurrent changes return 409 instead of overwriting; DRAFT edits re-check status under a row lock.
+- Resume follows the decision: no back-billing, `nextInvoiceDate` = next anchor on or after today (`nextAnchorOnOrAfter`, month-end anchors preserved).
+- Customers may close (not otherwise transition) their own subscription when the plan is closable; renew only from ACTIVE/CLOSED.
+- SUBSCRIPTION-scoped discounts can be attached on create/edit (PRODUCT discounts apply automatically at billing).
+- `/api/me/subscriptions` paginated.
+- Staff-created customers no longer get the shared default password `Customer@1234`; they get a random one plus a reset link.
+
+Tests (`test/subscriptions.test.ts`, 13): customer creation without default password + profile isolation; catalog pricing (₹1,000 + ₹560 variant × 2 = ₹3,120) and forged `unitPrice` rejected; line-limit rejection; template copy with expiry; discount scope on attach; full lifecycle with cursor set/cleared; illegal jump 409 and post-DRAFT edit 409; min-quantity on confirm; pause/resume no-back-billing and non-pausable plan; renew; anchor helper month-end cases; portal list isolation and 404s on detail, pause, transition, 403 on staff list; customer close allowed but other transitions 403.
+
+Note: the team's `tests/verify_person_1.ts` and `verify_person_2.ts` scripts (not part of the Vitest suite) were not updated and may fail where they send `unitPrice`.
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 28 problems (0 errors, 28 warnings)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 7 passed (7) | Tests 46 passed (46)
 ```

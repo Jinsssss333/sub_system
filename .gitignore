@@ -11,6 +11,7 @@ node_modules/
 # Production build outputs
 dist/
 build/
+frontend/.vite/
 
 # Logs & temp
 npm-debug.log*
@@ -22,4 +23,3 @@ yarn-error.log*
 # IDE
 .vscode/
 .idea/
-

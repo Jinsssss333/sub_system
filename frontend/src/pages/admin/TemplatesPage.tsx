@@ -73,7 +73,7 @@ export function TemplatesPage() {
       <Table head={<tr><th className="th">Template</th><th className="th hidden sm:table-cell">Plan</th><th className="th hidden md:table-cell">Products</th><th className="th text-right">Per cycle</th></tr>} footer={list.data && <Pagination page={list.page} pageSize={list.pageSize} total={list.data.meta.total} onPage={list.setPage} />}>
         {list.isLoading ? <TableSkeleton columns={cols} rows={3} /> : list.isError ? <TableMessage columns={cols}><ErrorState error={list.error} /></TableMessage> : list.data!.data.length === 0 ? <TableMessage columns={cols}><EmptyState title="No templates yet" /></TableMessage> : (
           list.data!.data.map((t) => (
-            <tr key={t.id} className="hover:bg-slate-50">
+            <tr key={t.id}>
               <td className="td"><p className="font-medium text-slate-900">{t.name}</p><p className="text-xs text-slate-500">Valid {t.validityDays} days</p></td>
               <td className="td hidden sm:table-cell">{t.plan.name}</td>
               <td className="td hidden whitespace-normal md:table-cell">{t.lines.map((l) => `${l.product.name}${l.variant ? ` (${l.variant.value})` : ''} × ${l.quantity}`).join(', ')}</td>

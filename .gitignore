@@ -1,29 +1,63 @@
 # Dependencies
 node_modules/
+**/node_modules/
 .pnp
 .pnp.js
 
-# Environment variables
+# Environment Variables & Secrets
 .env
-.env.local
-.env.*.local
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+!**/*.env.example
+!**/*.env.*.example
 
-# Production build outputs
+# Production Build Outputs
 dist/
+**/dist/
 build/
-frontend/.vite/
+**/build/
+out/
+**/out/
+*.tsbuildinfo
+**/*.tsbuildinfo
 
-# Logs & temp
+# Vite & Bundler Caches
+.vite/
+**/.vite/
+.cache/
+**/.cache/
+.turbo/
+
+# Logs & Diagnostics
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.turbo
-.DS_Store
+pnpm-debug.log*
 
-# IDE
+# Test Coverage
+coverage/
+**/coverage/
+.nyc_output/
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor & IDE Directories
 .vscode/
 .idea/
-
-# Local test env
-.env.test
-backend/.env.test
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

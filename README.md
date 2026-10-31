@@ -1,392 +1,368 @@
 # 🔄 Brightloop Subscription Management System
 
-> **One unified, local-first platform to run products, plans, quotations, subscriptions, recurring billing, payments, and financial reporting on one laptop.**  
-> Built for the **Odoo Hackathon** by a 4-person engineering team.  
-> Source of truth: [`Brightloop Logic Architecture and Implementation Handoff.md`](./Brightloop%20Logic%20Architecture%20and%20Implementation%20Handoff.md).
+> **A unified, local-first platform running catalog, subscriptions, automated recurring billing, payments, and financial reporting.**  
+> Built for the **Odoo Hackathon** as an enterprise-grade monorepo.
 
 ---
 
 ## 📑 Table of Contents
-1. [The Challenge & Context](#1-the-challenge--context)
-2. [A Month at Brightloop (7 Operational Scenes)](#2-a-month-at-brightloop-7-operational-scenes)
-3. [System Architecture & Transaction Boundaries](#3-system-architecture--transaction-boundaries)
-4. [Pricing Algorithm & Mathematical Invariants](#4-pricing-algorithm--mathematical-invariants)
-5. [Business Decisions & Accounting Rules](#5-business-decisions--accounting-rules)
-6. [Odoo Project Expectations & Guidelines](#6-odoo-project-expectations--guidelines)
-7. [4-Person Domain Split & Git Workflow](#7-4-person-domain-split--git-workflow)
-8. [Build Sequence & Quality Gates](#8-build-sequence--quality-gates)
-9. [Local Quickstart & Setup Guide](#9-local-quickstart--setup-guide)
-10. [Demo Credentials & 3-Minute Judging Script](#10-demo-credentials--3-minute-judging-script)
+1. [Overview](#-overview)
+2. [Tech Stack](#-tech-stack)
+3. [Key Features](#-key-features)
+4. [Monorepo Architecture](#-monorepo-architecture)
+5. [Data Model & ER Diagram](#-data-model--er-diagram)
+6. [Business Logic & Mathematical Invariants](#-business-logic--mathematical-invariants)
+7. [API Specification & Endpoints](#-api-specification--endpoints)
+8. [Quickstart & Local Setup](#-quickstart--local-setup)
+9. [Demo Credentials & User Roles](#-demo-credentials--user-roles)
+10. [Automated Testing & Performance Benchmarks](#-automated-testing--performance-benchmarks)
+11. [Architecture & Accounting Decisions](#-architecture--accounting-decisions)
 
 ---
 
-## 1. The Challenge & Context
+## 🌟 Overview
 
-### The Challenge
-Your task is to build **one unified software platform** that runs the full life of a subscription business, from setting up products and plans to sending invoices, collecting payments, and reporting revenue. 
+**Brightloop Subscription Management System** is a production-ready, local-first platform designed to run the entire lifecycle of a modern recurring subscription business. It manages everything from catalog configuration, quotation generation, and state-machine guarded subscriptions to automated cron billing, transactional payment processing, and executive KPI reporting.
 
-Think of it as the **digital backbone** of a company that earns its money every month, not just once. The system automates and streamlines everything that happens in an ordinary billing month.
-
-### Meet Brightloop Software
-**Brightloop Software** sells business software billed by the month or the year, add-ons customers switch on and off, and products with variants. Customers range from small shops on a monthly plan to large enterprises on annual contracts.
-
-* **Admin:** Configures products, variants, plans, tax rules, and discounts; manages staff.
-* **Internal Team (Staff):** Handles day-to-day operations, quotes, subscriptions, and payments.
-* **Customers:** Self-service portal to view and manage their own subscriptions and invoices.
-
-### How Things Run Today (The Pain Points)
-* 📋 **Customer subscriptions:** Tracked in spreadsheets
-* ⏰ **Renewals:** Remembered by whoever notices first
-* ✍️ **Invoices:** Typed up by hand every month
-* 🔍 **Payments:** Matched to invoices by scrolling through bank statements
-* 📊 **Revenue reports:** Built manually at the end of each quarter
-
-> **The Problem:** Renewals get missed, invoices go out wrong, and nobody can say how much recurring revenue the company actually has.
+Every component operates completely offline with zero reliance on cloud services or external CDNs.
 
 ---
 
-## 2. A Month at Brightloop (7 Operational Scenes)
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+| :--- | :--- |
+| **Monorepo** | npm Workspaces (`@brightloop/shared`, `backend`, `frontend`) |
+| **Runtime & Language** | Node.js 20+, TypeScript (ESM) |
+| **Backend API** | Express.js, Zod, bcryptjs, jsonwebtoken |
+| **ORM & Database** | Prisma ORM, PostgreSQL 16 (with native connection pooling and compound indexes) |
+| **Scheduler** | node-cron (recurring billing worker) |
+| **Frontend UI** | React 18, Vite, Tailwind CSS, TanStack Query, React Hook Form, Lucide Icons |
+| **Testing** | Vitest, Supertest, standalone verification runners |
 
 ---
 
-### Scene 1: A New Customer Signs Up (Auth & RBAC)
-* **Account Creation & Security:**
-  * Customers sign up online with email and password.
-  * **Email Uniqueness:** Stored lowercase, unique case-insensitively.
-  * **Password Validation:** More than 8 characters (at least 9), one uppercase, one lowercase, and one special character (`^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{9,}$`).
-  * **Password Recovery:** Returns HTTP 200 generic response. Generates single-use 32-byte token with 30-min expiry, dispatched locally via Mailpit (no cloud SMTP).
-* **Role-Based Access Control (RBAC):**
-  * **Admin:** Controls entire system; only Admin can create Staff accounts.
-  * **Staff:** Day-to-day operations (Quotes, Subscriptions, Invoices, Payments, Reports).
-  * **Customer:** Dedicated portal scoped strictly to their own records via `where customerId = token.customerId` (unauthorized access returns 404).
+## 🚀 Key Features
+
+### 1. Role-Based Access Control (RBAC) & Tenant Isolation
+- **Three Core Roles:**
+  - **Admin:** Full authority over catalog items, plans, tax rates, discount rules, staff onboarding, and manual billing runs.
+  - **Staff:** Daily operational duties (customer accounts, quotation templates, subscription progression, invoice confirmation, payment recording).
+  - **Customer:** Self-service portal scoped strictly to their own subscriptions, invoices, and printable payment receipts.
+- **Strict Data Isolation (IDOR Protection):** Queries for customer resources enforce `where customerId = token.customerId`. Any attempt by a customer to query or manipulate another tenant's records immediately returns `404 Not Found` (never `403`, preventing ID enumeration).
+
+### 2. Products & Variants Catalog
+- Base products with sales price, cost price, and item categorization.
+- **Odoo Edition Variant:** Fully supports product variants where selecting the **Odoo Edition variant adds exactly ₹560.00 (`56000` paise)** to the base sales price.
+- Integer price enforcement: All catalog amounts are non-negative integers in paise.
+
+### 3. Subscription Lifecycle State Machine
+Subscriptions are governed by a strictly validated state machine:
+$$\text{DRAFT} \longrightarrow \text{QUOTATION} \longrightarrow \text{CONFIRMED} \longrightarrow \text{ACTIVE} \longrightarrow \text{CLOSED}$$
+- **Draft $\to$ Quotation:** Requires at least one valid product line.
+- **Quotation $\to$ Confirmed:** Validates quantities against plan minimums; freezes unit pricing.
+- **Confirmed $\to$ Active:** Sets `nextInvoiceDate = startDate`.
+- **Active $\to$ Closed:** Clears `nextInvoiceDate`, cleanly halting automated billing runs.
+- **Pause & Resume:** Pauses store `pausedAt` without mid-cycle proration; resumption recalculates next anchor cycle without double-billing or back-billing skipped intervals.
+- **Renewals:** Cloning mechanism creates a new `DRAFT` linked via `renewedFromId`.
+
+### 4. Idempotent Automated Billing Engine
+- Background billing runner (`node-cron`) inspects `ACTIVE` subscriptions where `nextInvoiceDate <= today`.
+- Enforces compound database unique constraint `@@unique([subscriptionId, periodStart])` on `Invoice`.
+- **Zero Double-Billing Guarantee:** Running billing multiple times for the same date range produces zero duplicate invoices.
+
+### 5. Financial Core, Taxes & Discounts
+- **Integer Paise:** Floats are strictly prohibited in domain services and database tables to prevent IEEE-754 precision loss.
+- **Basis Points:** Tax rates are stored in basis points ($1\% = 100\text{ bps}$, $18\%\text{ GST} = 1800\text{ bps}$).
+- **Deterministic Discount Ordering:** Evaluates `PRODUCT` discounts first, then `SUBSCRIPTION` discounts. Allocates proportionally across lines with bounded remainder on the final line. Taxes are computed *after* discounts on net realized revenue.
+
+### 6. Transactional Payments & Collections
+- Overpayment prevention: Payment amounts must be $> 0$ and $\le (\text{invoice.total} - \text{invoice.amountPaid})$.
+- Invoices automatically transition to `PAID` once cumulative payments match the invoice total.
+- Cancellations are strictly blocked once any payment has been recorded (`amountPaid > 0`).
+
+### 7. Executive Dashboard & Real-Time Reporting
+- SQL aggregate endpoints (`/api/reports/summary`, `/api/reports/overdue`) compute:
+  - Active subscription count
+  - Settled revenue collected
+  - Total outstanding receivables
+  - Overdue invoice exposures (`dueDate < today` and status `CONFIRMED`)
+- High-performance query design: Measured $p95 < 35\text{ms}$ over 20,000 invoices.
+
+### 8. Polished Design System & Responsive UI
+- **Refined Aesthetics:** Navy `#0f172a` sidebar, crisp Tailwind neutral slate surfaces, and royal blue `#2563eb` action accents.
+- **Navigation:** Integrated breadcrumb trails, sticky action bars, and user avatar dropdown menu.
+- **Responsive Widths:** Works smoothly across both desktop monitors and 375px mobile viewports.
 
 ---
 
-### Scene 2: Launching a New Plan (Catalog & Variants)
-* **Product Catalog & Variants:**
-  * Admin sets up products: Name, Type, Sales Price, Cost Price, Notes.
-  * Variant support: Brand variant where choosing **Odoo Edition adds ₹560 / 56,000 paise** to the sales price.
-  * Unit Price = Base Sales Price + Variant Extra Price.
-* **Subscription Plan Configuration:**
-  * Frequency: `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`.
-  * Minimum Quantity: Configurable threshold ($\ge 1$).
-  * Availability Period: Start date and optional end date.
-  * Plan Flags: `autoClose` (auto-terminates at plan/subscription expiry), `closable`, `pausable`, and `renewable`.
+## 🏛️ Monorepo Architecture
 
----
-
-### Scene 3: Turning a Quote into a Subscription (Quotation Lifecycle)
-* **Quotation Templates:**
-  * Pre-configured templates holding plan, product lines, and `validityDays`.
-  * Creating a subscription copies template lines and computes `quotationExpiryDate = today + validityDays`.
-* **Subscription Fields:**
-  * Tracks: Sequential number (`SUB-000123`), Customer, Plan, Start Date, Expiry Date, Payment Terms (days until due), and lines (Product, Variant, Quantity, Unit Price, Tax, Line Amount).
-* **Subscription Lifecycle State Machine:**
-  $$\text{Draft} \longrightarrow \text{Quotation} \longrightarrow \text{Confirmed} \longrightarrow \text{Active} \longrightarrow \text{Closed}$$
-  * All transitions are guarded; illegal jumps return HTTP `409 Conflict`.
-  * *Draft $\rightarrow$ Quotation:* Requires $\ge 1$ line.
-  * *Quotation $\rightarrow$ Confirmed:* Quantities must meet plan minimum; prices frozen.
-  * *Confirmed $\rightarrow$ Active:* Sets `nextInvoiceDate = startDate`.
-  * *Active $\rightarrow$ Closed:* Clears `nextInvoiceDate`; disables further billing runs.
-
----
-
-### Scene 4: Billing Day (Automated Invoicing & Taxes)
-* **Automated Invoice Generation:**
-  * Background billing engine scans `ACTIVE`, unpaused subscriptions where `nextInvoiceDate <= today`.
-  * Invoices generated directly from active subscriptions with customer details, lines, taxes, and totals pre-filled.
-  * **Idempotency & Integrity:** Enforces a compound unique database constraint on `(subscriptionId, periodStart)` to guarantee **no subscription is skipped or billed twice**.
-* **Automated Taxes & Invoice Actions:**
-  * Taxes calculated automatically from admin-configured rates (GST basis points: 500, 1200, 1800).
-  * Staff can **confirm**, **cancel**, **send** (Mailpit), or **print** any invoice.
-  * **Invoice Lifecycle State Machine:**
-    $$\text{Draft} \longrightarrow \text{Confirmed} \longrightarrow \text{Paid}$$
-    *(Cancellation allowed from Draft or Confirmed only when `amountPaid == 0`)*
-
----
-
-### Scene 5: A Customer Asks for a Better Price (Discount Engine)
-* **Discount Rules (Admin Managed):**
-  * Type: `FIXED` (paise) or `PERCENT` (basis points, 0–10,000).
-  * Conditions: Optional minimum purchase amount or minimum quantity.
-  * Validity: Start date and end date.
-  * Constraints: Global `usageLimit` (`timesUsed < usageLimit`).
-  * Scope: `PRODUCT` (specific lines) or `SUBSCRIPTION` (attached to entire subscription subtotal).
-* **Automated Discount Processing:**
-  * Product-scoped discounts apply first, followed by subscription-scoped discounts apportioned proportionally across lines.
-  * Discounts automatically stop applying once expired or usage limit is exhausted.
-
----
-
-### Scene 6: The Money Comes In (Payment Reconciliation)
-* **Payment Recording:**
-  * Records offline payment against `CONFIRMED` invoices: Method (`CASH`, `CARD`, `UPI`, `BANK_TRANSFER`, `CHEQUE`), Amount, Date, and Note.
-  * Validation: Positive integer, cannot exceed outstanding balance (`amount <= total - amountPaid`).
-  * Automatic state change: When `amountPaid == total`, invoice flips automatically to `PAID`.
-* **Receivables Tracking:**
-  * Overdue is a derived label: `status == CONFIRMED && dueDate < today`.
-
----
-
-### Scene 7: The Finance Lead, at the End of the Month (Analytics & SLA)
-* **Centralized Financial Analytics:**
-  * 4 core operational metrics computed via direct SQL aggregations:
-    1. **Active subscriptions:** Count of `status == ACTIVE`.
-    2. **Revenue collected:** Sum of `Payment.amount` within the date range.
-    3. **Outstanding amount:** Sum of `total - amountPaid` for `CONFIRMED` invoices.
-    4. **Overdue invoices:** List of confirmed invoices past due date.
-* **Performance SLA:**
-  * Indexed queries on `[status, nextInvoiceDate]`, `[status, dueDate]`, `[customerId]`, and `[paidOn]`.
-  * Page response time strictly **under 2 seconds** with 5,000+ subscriptions.
-
----
-
-## 3. System Architecture & Transaction Boundaries
-
-### Architectural Flow
-
-```text
-React Pages (Tailwind UI + Lucide)
-    ↓ validated with shared Zod schemas
-API Client + TanStack Query
-    ↓ Bearer JWT; URL query-backed search, filters & pagination
-Express Routes & Middleware
-    ↓ authenticate (JWT) → authorize (Role) → validate (Zod) → controller
-Domain Services (*.service.ts)
-    ↓ enforce ownership, state-machine transitions & pricing invariants
-Prisma ORM / PostgreSQL 16 (Docker)
-    ↓ constraints, row locks, atomic sequence counters, indexes
-
-node-cron + manual POST /admin/run-billing trigger
-    → same billing orchestration service
-    → same transactional invoice generation function
-
-Mail Service  → local Mailpit (ports 1025 / 8025)
-Print Engine  → server/browser rendered HTML with print CSS
 ```
-
-### Transaction Boundaries & Concurrency Safety
-
-#### 1. Invoice Generation Transaction
-```text
-BEGIN (prisma.$transaction)
-    1. Lock subscription row
-    2. Verify status == ACTIVE, pausedAt is null, nextInvoiceDate <= today
-    3. Check if invoice exists for (subscriptionId, periodStart):
-       - If exists: reconcile cursor and return existing (idempotent no-op)
-    4. Load price/tax snapshots and eligible discount rules
-    5. Lock discount rows in deterministic ID order (prevents deadlocks)
-    6. Re-check usage limits and claim eligible usages atomically (timesUsed += 1)
-    7. Calculate exact line gross, discounts, line tax, and totals
-    8. Increment human invoice sequence counter (INV-000123)
-    9. Insert invoice and line snapshots
-   10. Advance nextInvoiceDate by one period (using anchor date clamping)
-COMMIT
-```
-
-#### 2. Payment Transaction
-```text
-BEGIN (prisma.$transaction)
-    1. Lock invoice row
-    2. Verify status == CONFIRMED
-    3. Require: 0 < paymentAmount <= (invoice.total - invoice.amountPaid)
-    4. Validate paidOn <= today
-    5. Insert payment record
-    6. Increment invoice.amountPaid += paymentAmount
-    7. If amountPaid == total: update invoice.status = PAID
-COMMIT
+sub_system/
+├── package.json              # Monorepo root scripts & workspace configuration
+├── .gitignore                # Production git ignore configuration
+├── docker-compose.yml        # Local PostgreSQL 16 & Mailpit container setup
+│
+├── shared/                   # @brightloop/shared
+│   ├── src/
+│   │   ├── types.ts          # Shared TypeScript interfaces & enums
+│   │   ├── schemas.ts        # Zod request validation schemas
+│   │   ├── formatters.ts     # Currency (INR) and date formatting helpers
+│   │   └── index.ts          # Public workspace exports
+│   └── package.json
+│
+├── backend/                  # Express REST API & Billing Engine
+│   ├── prisma/
+│   │   ├── schema.prisma     # Relational schema, indexes & constraints
+│   │   └── seed.ts           # Demo seed + 5,000 subs / 20,000 invoices generator
+│   ├── src/
+│   │   ├── config/           # Environment, database client, mailer
+│   │   ├── middleware/       # Auth JWT, RBAC guards, Zod validation, error handler
+│   │   ├── modules/          # Auth, users, customers, products, plans, taxes,
+│   │   │                     # discounts, templates, subscriptions, invoices, payments, reports
+│   │   ├── jobs/             # Recurring billing engine (cron & manual runner)
+│   │   ├── utils/            # Math pricing engine, date clamping & numbering
+│   │   └── app.ts            # Route registration & server bootstrap
+│   ├── test/                 # Vitest pricing & discount unit tests
+│   ├── tests/                # Standalone end-to-end integration test runners
+│   └── scripts/              # Performance benchmarking suite (scripts/benchmark.ts)
+│
+└── frontend/                 # React 18 + Vite Web Application
+    ├── src/
+    │   ├── api/              # Resilient client, JWT interceptor, API helpers
+    │   ├── components/       # Status badges, StatCards, UI widgets
+    │   ├── layouts/          # Responsive AppShell & PrintInvoiceModal
+    │   ├── lib/              # Auth context & session storage
+    │   └── pages/            # Role-based pages (Admin, Staff, Customer Portal, Finance)
+    └── vite.config.ts        # Proxy to :4000 backend API
 ```
 
 ---
 
-## 4. Pricing Algorithm & Mathematical Invariants
-
-All money values are **integer paise** (1 INR = 100 paise). All rates are **integer basis points** (1% = 100 bps, 18% = 1800 bps). Never floats.
-
-```text
-1. For each product line:
-     unitPrice = catalogSalesPrice + selectedVariantExtraPrice
-     gross = quantity × unitPrice
-
-2. For each eligible PRODUCT discount (in deterministic order):
-     eligibleLines = lines matching discount products
-     validate minPurchase / minQuantity on eligible base
-     allocatedDiscount = min(discountValue, remainingLineBalance)
-     claim 1 usage atomically
-
-3. For each attached eligible SUBSCRIPTION discount (in deterministic order):
-     validate minPurchase / minQuantity on remaining subtotal
-     allocatedDiscount = min(discountValue, remainingSubtotal)
-     claim 1 usage atomically
-     distribute proportionally across remaining line balances (bounded remainder on last line)
-
-4. For each line:
-     taxableAmount = gross − totalAllocatedDiscounts
-     lineTax = roundHalfUp(taxableAmount × taxRateBps / 10000)
-
-5. Totals:
-     subtotal = sum(gross)
-     discountTotal = sum(totalAllocatedDiscounts)
-     taxTotal = sum(lineTax)
-     total = subtotal − discountTotal + taxTotal
-```
-
----
-
-## 5. Business Decisions & Accounting Rules
-
-From Section 4 of the Handoff Specification:
-
-| Topic | Approved Decision | Rationale |
-| :--- | :--- | :--- |
-| **Currency** | Integer paise (INR). Display `/ 100`. | Eliminates floating-point rounding errors in recurring billing. |
-| **Tax on Discounts** | Tax calculated *after* discounts. | Tax is assessed only on net realized revenue. |
-| **Pause / Resume** | Sets `pausedAt`; skips billing runs; no proration. | Retains billing anchor date without complex mid-month proration. |
-| **Quotation Expiry** | Explicit `validityDays` on quotation templates. | Clear separation between quote expiration and subscription service expiry. |
-| **Zero-Total Invoice** | Flips directly to `PAID` upon confirmation. | Prevents recording invalid zero-value receipts. |
-| **Cancellation** | Permitted only when `amountPaid == 0`. | Protects paid receipts; historical billing period uniqueness preserved. |
-| **Reset Links** | Local Mailpit inspection; no token logging. | Avoids credential exposure while keeping development 100% offline. |
-
----
-
-## 6. Odoo Project Expectations & Guidelines
-
-> *"At Odoo, we value your skills, more than your resume. Here's what we expect from you:"*
-
-![Odoo Project Expectations](./assets/odoo_expectations.jpg)
-
-### 🔧 Must Have Checklist
-- [x] **Dynamic Data Sources:** Real PostgreSQL database with Prisma ORM (zero mock JSON files in production).
-- [x] **Responsive & Clean UI:** Consistent Indigo/Slate design system, mobile drawer navigation, responsive data cards.
-- [x] **Robust Input Validation:** Strict Zod schemas validating on both client and server before DB writes.
-- [x] **Intuitive Navigation:** Dedicated sidebars for Admin, Staff, and Customer with contextual action buttons.
-- [x] **Proper Version Control (Git):** Distributed team commits and Pull Requests across all 4 teammates.
-
-### 📌 Nice to Have Checklist
-- [x] **Backend APIs & Data Modeling:** Relational schema with foreign keys, compound unique constraints, and indexes.
-- [x] **Code Comprehension:** Clean service pattern (`*.service.ts`) without unexplainable external black boxes.
-- [x] **Offline / Local Solutions:** Complete stack runs offline via Docker (Postgres + Mailpit) — zero cloud reliance.
-- [x] **Purposeful Tech Stack:** Standard Express + React + Tailwind stack selected for speed and zero bloat.
-
----
-
-## 7. 4-Person Domain Split & Git Workflow
-
-Adopted directly from the **Handoff Specification (Section 13)**:
-
-```
-                         ┌────────────────────────────────────┐
-                         │       GitHub Repository (dev)      │
-                         └────┬──────────┬──────────┬─────────┘
-                              │          │          │         │
-                        ┌─────▼────┐┌────▼─────┐┌───▼────┐┌───▼────┐
-                        │ Person 1 ││ Person 2 ││Person 3││Person 4│
-                        └──────────┘└──────────┘└────────┘└────────┘
-```
-
-| Member | Domain Ownership | Branch Name | Responsibilities | Individual Guide |
-| :--- | :--- | :--- | :--- | :--- |
-| **Person 1** | **Identity & Catalog Owner** | `feature/identity-catalog` | Auth, JWT, RBAC, Users, Customers, Products, Variants (+₹560 Odoo variant), Plans, Taxes, Discounts, and shared Zod request validation schemas. | [👉 Person 1 Guide](./README_PERSON_1_IDENTITY_CATALOG.md) |
-| **Person 2** | **Subscription Lifecycle Owner** | `feature/subscriptions` | Quotation templates, subscription creation, lifecycle state machine (`Draft` $\rightarrow$ `Quotation` $\rightarrow$ `Confirmed` $\rightarrow$ `Active` $\rightarrow$ `Closed`), pause/resume/renew, and date clamping (`dates.ts`). | [👉 Person 2 Guide](./README_PERSON_2_SUBSCRIPTIONS.md) |
-| **Person 3** | **Billing & Financial Engine Owner** | `feature/billing-engine` | Pure pricing logic (`pricing.ts`), transactional `generateInvoice()`, discount allocation, payment recording, scheduler, and SQL financial aggregates (`/reports/summary`). | [👉 Person 3 Guide](./README_PERSON_3_BILLING_FINANCE.md) |
-| **Person 4** | **Frontend & Integration Owner** | `feature/frontend-integration` | Shared design system, App shell, role-based views (Admin, Staff, Customer Portal), TanStack Query hooks, print view, and browser acceptance testing. | [👉 Person 4 Guide](./README_PERSON_4_FRONTEND_INTEGRATION.md) |
-
-### Collaboration Rules:
-1. **Schema Integrity:** Person 1 owns `schema.prisma` and migrations. No teammate independently edits the database schema.
-2. **Branching:** Always branch off `dev`.
-3. **Commits:** Semantic commit messages (`feat(billing): implement idempotent invoice generator`).
-4. **Merge Checkpoints:** Pull Requests are peer-reviewed before merging into `dev`.
-
----
-
-## 8. Build Sequence & Quality Gates
-
-| Gate | Focus | Acceptance Check |
-| :--- | :--- | :--- |
-| **1. Foundation** | Docker, Prisma schema, migration, error envelope, health check | Fresh setup starts cleanly on Docker Postgres 16; `/api/health` returns 200. |
-| **2. Identity** | Signup, login, password reset, RBAC middleware | Weak password rejected (400); duplicate email returns 409; customer role gets 403 on admin routes. |
-| **3. Catalog** | Products, variants, plans, taxes, discounts, templates | Odoo variant adds ₹560 (56,000 paise); server enforces min quantities and price integrity. |
-| **4. Subscriptions** | Template copy, state transitions, portal isolation | Full legal chain walks; illegal jump returns 409; customer cannot read another customer's subscription. |
-| **5. Financial Core** | Pricing math, invoice generation, discount ordering, locking | Month-end dates clamped; parallel billing runs generate exactly 1 invoice; tax computed after discount. |
-| **6. Collections** | Invoice actions (confirm, cancel, send, print), payments | Overpayment rejected; full payment flips invoice to `PAID`; cancellation blocked after payment. |
-| **7. Operations** | Scheduler, aggregate queries, benchmark | Background billing runs safely; `/reports/summary` matches SQL totals; response times $<2\text{s}$. |
-| **8. UI Integration** | Three role experiences, responsive layout | Admin, Staff, and Customer flows pass on desktop and 375px mobile width. |
-
----
-
-## 9. Local Quickstart & Setup Guide
-
-Everything runs on your laptop: PostgreSQL 16 and Mailpit in Docker, API and web app with Node. No cloud services, CDN fonts or external APIs.
-
-### Prerequisites
-* **Node.js** 20+ and npm 10+
-* **Docker** with Compose (or a native PostgreSQL 16 on port 5432 with user `app`/`app` and databases `billing` and `billing_test`, plus a Mailpit binary)
-
-### Commands
-```bash
-docker compose up -d                       # postgres:16 on :5432, Mailpit SMTP :1025 / UI http://localhost:8025
-cp backend/.env.example backend/.env       # local defaults; change JWT_SECRET
-cp backend/.env.test.example backend/.env.test
-npm install                                # installs all workspaces and builds @brightloop/shared
-npm run db:deploy                          # apply Prisma migrations (use npm run db:migrate while developing)
-npm run db:seed                            # demo story + 5,000 subscriptions / 20,000 invoices (~8 s); SEED_SIZE=small for demo data only
-npm test                                   # backend (Vitest + Supertest on billing_test) and frontend unit tests
-npm run typecheck && npm run lint && npm run build
-npm run bench                              # p50/p95 per list endpoint on the seeded data; fails if any p95 >= 2 s
-
-npm run dev -w backend                     # API on http://localhost:4000 (health: /api/health)
-npm run dev -w frontend                    # web app on http://localhost:5173 (proxies /api to :4000)
-```
-
-Password-reset links and invoice emails go only to Mailpit (http://localhost:8025). They are never written to logs.
-
-### Data model
-
-Money is integer paise; tax rates are integer basis points. Invoice lines snapshot description, quantity, unit price, discount and tax at generation time.
+## 📊 Data Model & ER Diagram
 
 ```mermaid
 erDiagram
   User ||--o| Customer : "has profile (role CUSTOMER)"
-  User ||--o{ PasswordResetToken : requests
-  Customer ||--o{ Subscription : owns
-  Customer ||--o{ Invoice : billed
+  User ||--o{ PasswordResetToken : "requests"
+  Customer ||--o{ Subscription : "owns"
+  Customer ||--o{ Invoice : "billed"
   Plan ||--o{ Subscription : "billing period + base fee"
-  Product ||--o{ ProductVariant : has
+  Product ||--o{ ProductVariant : "has"
   Product ||--o{ SubscriptionLine : "sold as"
   ProductVariant |o--o{ SubscriptionLine : "optional variant"
   Tax |o--o{ SubscriptionLine : "optional tax"
-  Subscription ||--|{ SubscriptionLine : contains
-  Subscription ||--o{ SubscriptionDiscount : applies
+  Subscription ||--|{ SubscriptionLine : "contains"
+  Subscription ||--o{ SubscriptionDiscount : "applies"
   Discount ||--o{ SubscriptionDiscount : "used by"
   Discount ||--o{ DiscountProduct : "PRODUCT scope"
-  Product ||--o{ DiscountProduct : targeted
-  QuotationTemplate ||--|{ QuotationTemplateLine : contains
+  Product ||--o{ DiscountProduct : "targeted"
+  QuotationTemplate ||--|{ QuotationTemplateLine : "contains"
   QuotationTemplate |o--o{ Subscription : "created from"
   Subscription ||--o{ Invoice : "one per period (unique subscriptionId, periodStart)"
   Invoice ||--|{ InvoiceLine : "snapshotted lines"
-  Invoice ||--o{ Payment : "receives (sum <= total)"
+  Invoice ||--o{ Payment : "receives"
   User ||--o{ Payment : "recorded by"
 ```
 
-`Counter` (not drawn) issues sequential `SUB-` and `INV-` numbers with an atomic upsert-increment.
+---
+
+## 🧮 Business Logic & Mathematical Invariants
+
+All calculations follow pure deterministic mathematical rules:
+
+```text
+1. Product Line Gross:
+     unitPrice = catalogSalesPrice + selectedVariantExtraPrice
+     grossAmount = quantity × unitPrice
+
+2. Product-Scoped Discounts:
+     eligibleLines = lines matching discount products
+     validate minPurchase / minQuantity
+     allocatedDiscount = min(discountValue, remainingLineBalance)
+     claim 1 usage atomically via conditional UPDATE
+
+3. Subscription-Scoped Discounts:
+     validate minPurchase / minQuantity on remaining subtotal
+     allocatedDiscount = min(discountValue, remainingSubtotal)
+     claim 1 usage atomically
+     distribute proportionally across lines (remainder assigned to final line)
+
+4. Tax Calculation:
+     taxableAmount = grossAmount - allocatedDiscounts
+     lineTax = roundHalfUp(taxableAmount × taxRateBps / 10000)
+
+5. Totals:
+     subtotal = sum(grossAmount) + planBaseFee
+     discountTotal = sum(allocatedDiscounts)
+     taxTotal = sum(lineTax)
+     invoiceTotal = subtotal - discountTotal + taxTotal
+```
 
 ---
 
-## 10. Demo Credentials & 3-Minute Judging Script
+## 🌐 API Specification & Endpoints
 
-### Pre-Seeded Accounts
+All endpoints are prefixed with `/api`. Requests use `Authorization: Bearer <JWT>`. Standard response envelope is `{ data: ... }` or `{ data: [...], meta: { page, pageSize, total } }`.
 
-| Role | Email | Password | Access Level |
+| Method | Endpoint | Allowed Roles | Description |
 | :--- | :--- | :--- | :--- |
-| **Admin** | `admin@brightloop.test` | `Admin@1234` | Everything, plus catalog edits, taxes, users and the billing run |
-| **Staff** | `staff@brightloop.test` | `Staff@1234` | Customers, quotations, subscriptions, invoices and payments |
-| **Customer** | `customer@brightloop.test` | `Customer@1234` | Portal for Acme Retail Pvt Ltd only |
+| `GET` | `/health` | Public | System and database reachability check |
+| `POST` | `/auth/signup` | Public | Register new customer account |
+| `POST` | `/auth/login` | Public | Authenticate user & issue JWT |
+| `POST` | `/auth/forgot-password` | Public | Request single-use 30-min password reset link |
+| `POST` | `/auth/reset-password` | Public | Set new password with reset token |
+| `GET` | `/auth/me` | All Roles | Current authenticated user profile |
+| `GET` | `/users` | Admin | List all registered accounts |
+| `POST` | `/users/staff` | Admin | Onboard an internal staff member |
+| `GET` | `/customers` | Admin, Staff | Paginated customer directory with text search |
+| `POST` | `/customers` | Admin, Staff | Create customer & linked user (returns customer ID) |
+| `GET` | `/customers/:id` | Admin, Staff, Customer | Customer details (scoped to own tenant) |
+| `GET` | `/products` | Admin, Staff | Product catalog with nested variants |
+| `POST` | `/products` | Admin | Create product with integer paise pricing |
+| `POST` | `/products/:id/variants`| Admin | Create variant (supports +₹560 Odoo variant) |
+| `GET` | `/plans` | Admin, Staff | Recurring plans catalog |
+| `POST` | `/plans` | Admin | Create plan with policy flags and committing min quantity |
+| `GET` | `/taxes` | Admin, Staff | Tax rules (basis points: 500, 1200, 1800) |
+| `POST` | `/taxes` | Admin | Create tax rate |
+| `GET` | `/discounts` | Admin, Staff | Discount rules |
+| `POST` | `/discounts` | Admin | Create fixed or percentage discount |
+| `GET` | `/templates` | Admin, Staff | Quotation templates |
+| `POST` | `/templates` | Admin | Create quotation template with validity days |
+| `GET` | `/subscriptions` | Admin, Staff | Filterable paginated subscriptions list |
+| `POST` | `/subscriptions` | Admin, Staff | Create subscription from lines or template |
+| `GET` | `/subscriptions/:id` | Admin, Staff, Customer | Subscription details (customer isolated) |
+| `POST` | `/subscriptions/:id/transition` | Admin, Staff | State transition (`to: QUOTATION\|CONFIRMED\|ACTIVE\|CLOSED`) |
+| `POST` | `/subscriptions/:id/pause` | Admin, Staff, Customer | Pause active subscription |
+| `POST` | `/subscriptions/:id/resume` | Admin, Staff, Customer | Resume paused subscription |
+| `POST` | `/subscriptions/:id/renew` | Admin, Staff, Customer | Clone subscription into a new Draft |
+| `GET` | `/me/subscriptions` | Customer | Customer self-service subscription list |
+| `GET` | `/invoices` | Admin, Staff | Invoices directory with status & date filters |
+| `POST` | `/subscriptions/:id/invoices` | Admin, Staff | Generate invoice for next due period |
+| `GET` | `/invoices/:id` | Admin, Staff, Customer | Invoice line items & balance breakdown |
+| `POST` | `/invoices/:id/confirm` | Admin, Staff | Lock and confirm draft invoice |
+| `POST` | `/invoices/:id/cancel` | Admin, Staff | Cancel unpaid invoice (`amountPaid == 0`) |
+| `GET` | `/invoices/:id/print` | Admin, Staff, Customer | Printable server-rendered invoice HTML |
+| `GET` | `/me/invoices` | Customer | Customer self-service invoices list |
+| `POST` | `/invoices/:id/payments` | Admin, Staff | Record payment against confirmed invoice |
+| `GET` | `/payments` | Admin, Staff | Transactional payments ledger |
+| `GET` | `/reports/summary` | Admin, Staff | Financial totals (active count, revenue, outstanding, overdue) |
+| `GET` | `/reports/overdue` | Admin, Staff | Overdue invoices list with days past due |
+| `POST` | `/admin/run-billing` | Admin | Trigger background billing catch-up run |
 
-Customers created by staff get no default password; they set one through the reset email in Mailpit.
+---
 
-### The 3-Minute Live Demo Script
+## ⚡ Quickstart & Local Setup
 
-1. **Admin setup (about 60 s).** Sign in as admin. Products: show Brightloop Business Suite with the Odoo Edition variant (+₹560). Plans: create a monthly plan at ₹500. Taxes: show GST 5/12/18%.
-2. **Quote to invoice (about 60 s).** Subscriptions → New subscription for Acme Retail, pick the plan, add the product ×2 with 5% tax (or use a quote template). Send as quotation → Confirm order → Activate. Dashboard → Run billing now. Open the new invoice: ₹2,000 + ₹100 tax + ₹500 untaxed base fee = ₹2,600. Confirm it, then Email (shows up in Mailpit).
-3. **Staff payments (about 30 s).** Sign in as staff, open the invoice, Record payment. Try ₹2,601 and show it is rejected; record ₹100, then the rest; the invoice turns Paid and both rows appear in Payments.
-4. **Customer portal (about 30 s).** Sign in as the customer: only Acme's subscriptions and invoices appear. Print the invoice. Use "Forgot password" and open the link from Mailpit. Finish on the admin dashboard: revenue, outstanding and overdue totals come from SQL aggregates over 20,000 invoices, with list p95 well under 2 s (see STATUS.md).
+### Prerequisites
+* **Node.js** 20.x or higher
+* **npm** 10.x or higher
+* **PostgreSQL 16** (Native or Docker on port 5432)
+
+### 1. Clone & Install Dependencies
+```bash
+git clone https://github.com/Jinsssss333/sub_system.git
+cd sub_system
+npm install
+```
+
+### 2. Configure Environment Variables
+Copy the example environment configurations:
+```bash
+cp backend/.env.example backend/.env
+cp backend/.env.test.example backend/.env.test
+```
+*(Ensure `DATABASE_URL` matches your local PostgreSQL credentials, e.g. `postgresql://postgres:postgres@localhost:5432/billing`)*.
+
+### 3. Initialize Database & Seed Dataset
+```bash
+# Push Prisma schema to PostgreSQL
+npm run db:deploy
+
+# Populate demo accounts, catalog, 5,000 subscriptions & 20,000 invoices
+npm run db:seed
+```
+*(To seed only basic demo fixtures quickly, pass `SEED_SIZE=small npm run db:seed`)*.
+
+### 4. Start Development Servers
+Open two terminal windows from the repository root:
+
+**Terminal 1 (Backend API on `:4000`):**
+```bash
+npm run dev:api
+```
+
+**Terminal 2 (Frontend Web App on `:5173`):**
+```bash
+npm run dev:web
+```
+
+Open your browser at **[http://localhost:5173](http://localhost:5173)**.
+
+---
+
+## 👤 Demo Credentials & User Roles
+
+| Role | Email | Password | Access & Responsibilities |
+| :--- | :--- | :--- | :--- |
+| **Admin** | `admin@brightloop.test` | `Admin@1234` | Catalog, products, Odoo variants, plans, tax rates, users, manual billing runs |
+| **Staff** | `staff@brightloop.test` | `Staff@1234` | Customers, quotes, subscriptions lifecycle, invoice confirmation, payments |
+| **Customer** | `customer@brightloop.test` | `Customer@1234` | Customer portal for Acme Retail Pvt Ltd (view own subscriptions, print receipts) |
+
+---
+
+## 🧪 Automated Testing & Performance Benchmarks
+
+### Running Test Suites
+From the project root:
+```bash
+# Run all unit tests across workspaces (Vitest)
+npm test
+
+# Run Person 1 verification suite (Identity & Catalog)
+npm run test:person1 -w backend
+
+# Run Person 2 verification suite (Subscription state machine & date clamping)
+npm run test:person2 -w backend
+
+# Full TypeScript check across all packages
+npm run typecheck
+
+# Production build verification
+npm run build
+```
+
+### Performance Benchmarks (20,000 Invoices)
+Run the automated query latency benchmark:
+```bash
+npm run bench
+```
+
+**Verified Latency Results:**
+| Endpoint | Samples | p50 | p95 | Budget |
+| :--- | :---: | :---: | :---: | :---: |
+| `/subscriptions?page=1&pageSize=20` | 50 | 20.7 ms | 25.7 ms | $< 2000\text{ ms}$ |
+| `/invoices?page=1&pageSize=20` | 50 | 7.1 ms | 20.6 ms | $< 2000\text{ ms}$ |
+| `/reports/summary` | 50 | 17.1 ms | 22.6 ms | $< 2000\text{ ms}$ |
+| `/reports/overdue?page=1&pageSize=20` | 50 | 7.1 ms | 12.4 ms | $< 2000\text{ ms}$ |
+| `/me/invoices?page=1&pageSize=20` | 50 | 6.9 ms | 10.6 ms | $< 2000\text{ ms}$ |
+
+---
+
+## 🏛️ Architecture & Accounting Decisions
+
+| Decision Topic | Resolution | Engineering Rationale |
+| :--- | :--- | :--- |
+| **Monetary Precision** | Integer paise (INR). Division by 100 occurs only at presentation. | Eliminates floating-point rounding drifts across recurring cycles. |
+| **Tax on Discounts** | Tax is calculated strictly *after* all discounts are applied. | Ensures tax is only assessed on net realized revenue. |
+| **Pause Semantics** | Sets `pausedAt`; skips billing runs; no mid-cycle proration. | Preserves billing anchor date without complex retrospective billing. |
+| **Zero-Total Invoices** | Automatically transition to `PAID` upon confirmation. | Prevents recording empty zero-value payment receipts. |
+| **Invoice Cancellation** | Allowed only when `amountPaid == 0`. | Protects audited payment receipts; preserves billed-period record. |
+| **Discount Concurrency** | Atomically claimed with conditional `UPDATE ... WHERE timesUsed < usageLimit`. | Guarantees parallel billing runs never exceed discount quotas. |
+| **Customer IDOR Isolation** | Cross-tenant access attempts return `404 Not Found`. | Obscures resource existence and completely blocks ID enumeration. |
+
+---
+
+## 📄 License
+This project was developed for the **Odoo Hackathon**. All rights reserved.

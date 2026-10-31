@@ -193,9 +193,9 @@ export function SubscriptionDetailPage() {
                 </TableMessage>
               ) : (
                 invoices.data!.data.map((inv) => (
-                  <tr key={inv.id} className="hover:bg-slate-50">
+                  <tr key={inv.id}>
                     <td className="td">
-                      <Link to={`${base}/invoices/${inv.id}`} className="font-medium text-primary-700 hover:underline">{inv.number}</Link>
+                      <Link to={`${base}/invoices/${inv.id}`} className="link">{inv.number}</Link>
                     </td>
                     <td className="td hidden sm:table-cell">{formatDate(inv.periodStart)} – {formatDate(inv.periodEnd)}</td>
                     <td className="td"><StatusBadge status={isOverdue(inv) ? 'OVERDUE' : inv.status} /></td>
@@ -252,10 +252,10 @@ export function SubscriptionDetailPage() {
             <Card title="Renewal history">
               <ul className="space-y-2 text-sm">
                 {s.renewedFrom && (
-                  <li>Renewed from <Link className="font-medium text-primary-700 hover:underline" to={`/subscriptions/${s.renewedFrom.id}`}>{s.renewedFrom.number}</Link></li>
+                  <li>Renewed from <Link className="link" to={`/subscriptions/${s.renewedFrom.id}`}>{s.renewedFrom.number}</Link></li>
                 )}
                 {s.renewals?.map((r) => (
-                  <li key={r.id}>Renewed as <Link className="font-medium text-primary-700 hover:underline" to={`/subscriptions/${r.id}`}>{r.number}</Link> <StatusBadge status={r.status} /></li>
+                  <li key={r.id}>Renewed as <Link className="link" to={`/subscriptions/${r.id}`}>{r.number}</Link> <StatusBadge status={r.status} /></li>
                 ))}
               </ul>
             </Card>

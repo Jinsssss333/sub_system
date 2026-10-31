@@ -82,7 +82,7 @@ export function PlansPage() {
       >
         {list.isLoading ? <TableSkeleton columns={cols} /> : list.isError ? <TableMessage columns={cols}><ErrorState error={list.error} onRetry={() => list.refetch()} /></TableMessage> : list.data!.data.length === 0 ? <TableMessage columns={cols}><EmptyState title="No plans yet" /></TableMessage> : (
           list.data!.data.map((p) => (
-            <tr key={p.id} className="hover:bg-slate-50">
+            <tr key={p.id}>
               <td className="td"><p className="font-medium text-slate-900">{p.name}</p><p className="text-xs text-slate-500">{periodLabel[p.billingPeriod]}</p></td>
               <td className="td tabular text-right font-medium">{formatINR(p.price)}</td>
               <td className="td hidden sm:table-cell">{p.minQuantity}</td>

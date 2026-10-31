@@ -8,51 +8,51 @@ import { api, One } from '../../api/client';
 import { Button, Field, FormError, Input } from '../../components/ui';
 import { homeFor, useAuth } from '../../lib/auth';
 import { applyServerErrors } from '../../lib/forms';
+import { Logo } from '../../layouts/AppShell';
 import { typedResolver } from '../../lib/forms';
 
 function AuthLayout({ title, subtitle, children, footer }: { title: string; subtitle: string; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      <aside className="relative hidden overflow-hidden bg-primary-700 lg:block">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.18),transparent_55%)]" aria-hidden />
-        <div className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full border-[48px] border-white/10" aria-hidden />
+    <div className="grid min-h-screen lg:grid-cols-[1fr_1fr] xl:grid-cols-[1.1fr_1fr]">
+      <aside className="relative hidden overflow-hidden bg-navy-900 lg:block">
+        <div
+          className="absolute inset-0 opacity-[0.35]"
+          style={{ backgroundImage: 'linear-gradient(rgba(148,163,184,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.12) 1px, transparent 1px)', backgroundSize: '32px 32px' }}
+          aria-hidden
+        />
+        <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-primary-900/40 to-transparent" aria-hidden />
         <div className="relative flex h-full flex-col justify-between p-12 text-white">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 ring-1 ring-white/25">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden>
-                <circle cx="12" cy="12" r="6.5" />
-              </svg>
-            </span>
-            <span className="text-lg font-semibold tracking-tight">Brightloop</span>
-          </div>
+          <Logo dark />
           <div className="max-w-md">
-            <h2 className="text-3xl font-semibold leading-tight tracking-tight">Recurring billing that adds up, every cycle.</h2>
-            <ul className="mt-8 space-y-4 text-sm text-primary-50">
+            <p className="text-xs font-semibold uppercase tracking-wider text-primary-300">Subscription billing platform</p>
+            <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight">Recurring revenue, reconciled to the paisa.</h2>
+            <ul className="mt-8 space-y-3.5 text-sm text-slate-300">
               {[
-                'Quotes to active subscriptions with a strict lifecycle',
-                'Invoices generated once per period, priced to the paisa',
-                'Payments reconciled safely, with live receivables',
+                'Quotes move through a strict lifecycle to active subscriptions',
+                'One invoice per billing period, generated in a single transaction',
+                'Payments validated against the open balance with row-level locks',
+                'Customers see only their own subscriptions and invoices',
               ].map((text) => (
                 <li key={text} className="flex items-start gap-3">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary-200" aria-hidden />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary-400" aria-hidden />
                   {text}
                 </li>
               ))}
             </ul>
           </div>
-          <p className="text-xs text-primary-200">Runs fully offline on your laptop: PostgreSQL, local mail, no cloud services.</p>
+          <dl className="grid grid-cols-3 gap-6 border-t border-white/10 pt-6 text-sm">
+            {[['Integer paise', 'No floating point'], ['PostgreSQL 16', 'Runs on your laptop'], ['< 2 s', 'Lists on 20k invoices']].map(([v, k]) => (
+              <div key={k}>
+                <dt className="text-xs text-slate-400">{k}</dt>
+                <dd className="mt-0.5 font-semibold text-white">{v}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </aside>
-      <main className="flex items-center justify-center px-4 py-12 sm:px-8">
+      <main className="flex items-center justify-center bg-white px-4 py-12 sm:px-8">
         <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-white">
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden>
-                <circle cx="12" cy="12" r="6.5" />
-              </svg>
-            </span>
-            <span className="font-semibold">Brightloop</span>
-          </div>
+          <Logo className="mb-8 lg:hidden" />
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1>
           <p className="mt-1.5 text-sm text-slate-500">{subtitle}</p>
           <div className="mt-8">{children}</div>
@@ -93,7 +93,7 @@ export function LoginPage() {
       footer={
         <>
           New customer?{' '}
-          <Link to="/signup" className="font-medium text-primary-600 hover:text-primary-700">
+          <Link to="/signup" className="link">
             Create an account
           </Link>
         </>
@@ -108,7 +108,7 @@ export function LoginPage() {
           <Input id="password" type="password" autoComplete="current-password" invalid={!!form.formState.errors.password} {...form.register('password')} />
         </Field>
         <div className="flex justify-end">
-          <Link to="/forgot-password" className="text-sm font-medium text-primary-600 hover:text-primary-700">
+          <Link to="/forgot-password" className="link text-sm">
             Forgot password?
           </Link>
         </div>
@@ -116,7 +116,7 @@ export function LoginPage() {
           Sign in
         </Button>
       </form>
-      <div className="mt-8 rounded-xl border border-dashed border-slate-300 bg-white p-4">
+      <div className="mt-8 rounded-lg border border-slate-200 bg-slate-50 p-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Demo accounts</p>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {DEMO.map((demo) => (

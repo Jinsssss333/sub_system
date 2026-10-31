@@ -26,7 +26,7 @@ export function MyInvoicesPage() {
         ) : (
           list.data!.data.map((inv) => (
             <tr key={inv.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/portal/invoices/${inv.id}`)}>
-              <td className="td"><Link to={`/portal/invoices/${inv.id}`} className="font-medium text-primary-700 hover:underline" onClick={(e) => e.stopPropagation()}>{inv.number}</Link><p className="text-xs text-slate-500">{inv.subscription?.number}</p></td>
+              <td className="td"><Link to={`/portal/invoices/${inv.id}`} className="link" onClick={(e) => e.stopPropagation()}>{inv.number}</Link><p className="text-xs text-slate-500">{inv.subscription?.number}</p></td>
               <td className="td hidden md:table-cell">{formatDate(inv.periodStart)} – {formatDate(inv.periodEnd)}</td>
               <td className="td hidden sm:table-cell">{formatDate(inv.dueDate)}</td>
               <td className="td"><StatusBadge status={isOverdue(inv) ? 'OVERDUE' : inv.status} /></td>

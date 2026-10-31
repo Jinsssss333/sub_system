@@ -40,9 +40,9 @@ export function PaymentsPage() {
           <TableMessage columns={cols}><EmptyState title="No payments yet" description="Record a payment from a confirmed invoice." /></TableMessage>
         ) : (
           list.data!.data.map((p) => (
-            <tr key={p.id} className="hover:bg-slate-50">
+            <tr key={p.id}>
               <td className="td">{formatDate(p.paidOn)}</td>
-              <td className="td"><Link to={`/invoices/${p.invoice.id}`} className="font-medium text-primary-700 hover:underline">{p.invoice.number}</Link></td>
+              <td className="td"><Link to={`/invoices/${p.invoice.id}`} className="link">{p.invoice.number}</Link></td>
               <td className="td hidden max-w-[14rem] truncate md:table-cell">{p.invoice.customerName}</td>
               <td className="td hidden sm:table-cell">{methodLabel(p.method)}</td>
               <td className="td tabular text-right font-medium text-emerald-700">{formatINR(p.amount)}</td>

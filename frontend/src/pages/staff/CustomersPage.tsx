@@ -60,7 +60,7 @@ export function CustomersPage() {
           <TableMessage columns={cols}><EmptyState title="No customers found" /></TableMessage>
         ) : (
           list.data!.data.map((c) => (
-            <tr key={c.id} className="hover:bg-slate-50">
+            <tr key={c.id}>
               <td className="td font-medium text-slate-900">{c.companyName ?? '—'}</td>
               <td className="td"><p>{c.user.name}</p><p className="text-xs text-slate-500">{c.user.email}</p></td>
               <td className="td hidden md:table-cell">{c.phone ?? '—'}</td>

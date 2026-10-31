@@ -390,3 +390,24 @@ Dataset: 5000 subscriptions, 20000 invoices, 17603 payments. 50 samples per endp
 - Only the 2 agreed concurrency tests exist (same-period invoice, two payments over the balance). There is no serializable-retry framework (by agreement).
 - Browser QA covered the 3 agreed flows at 1440 px and 375 px plus a route smoke test. Discounts, templates and the users pages were loaded but not exercised end to end in the browser.
 - The npm advisories listed above remain open.
+
+
+## UI polish (branch `feature/ui-polish`, from `dev` @ 7795c9b)
+
+Design pass requested after the merge: a standard, professional admin look.
+
+- Dark navy sidebar with grouped navigation and an active-item accent; 56 px white topbar with route breadcrumbs and a user menu (name, role, email, sign out).
+- Palette moved from indigo to corporate blue (`primary` = Tailwind blue); cards use a 1 px border with a very light shadow; radii tightened to 6–8 px; inputs are 36 px; tables use a tinted header row, 11 px uppercase labels, 40 px rows and hover; badges are squared.
+- Dashboard chart is now an SVG bar chart with a rounded y-axis, gridlines and compact ₹ labels (₹50 L, ₹1 Cr…).
+- Login: dark brand panel with a grid texture, value points and three fact tiles; the form side is plain white.
+- Links use one `.link` class; page headers carry a bottom rule.
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 16 problems (0 errors, 16 warnings)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 11 passed (11) | Tests 78 passed (78)
+$ npm test -w frontend   -> Test Files 1 passed (1) | Tests 11 passed (11)
+```
+
+Browser QA re-run (Playwright, headless Chromium): all 15 routes at 1440 px and 375 px with 0 console errors, 0 API errors and no horizontal overflow; the three flows (admin setup → billing, staff payments, customer portal) pass again at desktop.

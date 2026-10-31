@@ -61,7 +61,7 @@ export function SubscriptionsPage() {
           list.data!.data.map((s) => (
             <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => navigate(`/subscriptions/${s.id}`)}>
               <td className="td">
-                <Link to={`/subscriptions/${s.id}`} className="font-medium text-primary-700 hover:underline" onClick={(e) => e.stopPropagation()}>
+                <Link to={`/subscriptions/${s.id}`} className="link" onClick={(e) => e.stopPropagation()}>
                   {s.number}
                 </Link>
               </td>

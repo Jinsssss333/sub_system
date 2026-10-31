@@ -57,15 +57,15 @@ export function CustomerPortal() {
 
       <div className="mb-3 mt-8 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-slate-900">Invoices to pay</h2>
-        <Link to="/portal/invoices" className="text-sm font-medium text-primary-600 hover:text-primary-700">All invoices</Link>
+        <Link to="/portal/invoices" className="link text-sm">All invoices</Link>
       </div>
       <Table head={<tr><th className="th">Invoice</th><th className="th hidden sm:table-cell">Due</th><th className="th">Status</th><th className="th text-right">Balance</th></tr>}>
         {open.isLoading ? <TableSkeleton columns={4} rows={3} /> : open.isError ? <TableMessage columns={4}><ErrorState error={open.error} /></TableMessage> : open.data!.data.length === 0 ? (
           <TableMessage columns={4}><EmptyState title="You're all paid up" description="No open invoices right now." /></TableMessage>
         ) : (
           open.data!.data.map((inv) => (
-            <tr key={inv.id} className="hover:bg-slate-50">
-              <td className="td"><Link to={`/portal/invoices/${inv.id}`} className="font-medium text-primary-700 hover:underline">{inv.number}</Link></td>
+            <tr key={inv.id}>
+              <td className="td"><Link to={`/portal/invoices/${inv.id}`} className="link">{inv.number}</Link></td>
               <td className="td hidden sm:table-cell">{formatDate(inv.dueDate)}</td>
               <td className="td"><StatusBadge status={isOverdue(inv) ? 'OVERDUE' : inv.status} /></td>
               <td className="td tabular text-right font-medium">{formatINR(inv.total - inv.amountPaid)}</td>

@@ -11,18 +11,42 @@ import { compactINR, formatDate, formatINR } from '../../lib/format';
 const monthLabel = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' });
 
 function RevenueChart({ data }: { data: Summary['monthlyRevenue'] }) {
-  const max = Math.max(1, ...data.map((d) => d.collected));
   if (data.length === 0) return <EmptyState title="No payments yet" description="Collected revenue appears here once payments are recorded." />;
+  const W = 640, H = 220, padL = 56, padR = 12, padT = 16, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const rawMax = Math.max(1, ...data.map((d) => d.collected));
+  // Round the axis top to a tidy number so gridlines land on readable values.
+  const mag = 10 ** Math.floor(Math.log10(rawMax));
+  const niceMax = Math.ceil(rawMax / mag) * mag;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * niceMax);
+  const band = plotW / data.length;
+  const barW = Math.min(44, band * 0.56);
   return (
-    <div className="flex h-48 items-end gap-2 sm:gap-3" role="img" aria-label="Collected revenue by month">
-      {data.map((d) => (
-        <div key={d.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
-          <span className="tabular text-[11px] font-medium text-slate-500">{compactINR(d.collected)}</span>
-          <div className="w-full rounded-t-md bg-primary-500/90 transition-all hover:bg-primary-600" style={{ height: `${Math.max(4, (d.collected / max) * 140)}px` }} title={`${d.month}: ${formatINR(d.collected)}`} />
-          <span className="text-xs text-slate-500">{monthLabel(d.month)}</span>
-        </div>
-      ))}
-    </div>
+    <figure className="m-0">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Collected revenue by month">
+        {ticks.map((t) => {
+          const y = padT + plotH - (t / niceMax) * plotH;
+          return (
+            <g key={t}>
+              <line x1={padL} x2={W - padR} y1={y} y2={y} stroke="#e2e8f0" strokeDasharray={t === 0 ? undefined : '3 3'} />
+              <text x={padL - 8} y={y + 3.5} textAnchor="end" fontSize="10.5" fill="#64748b" className="tabular">{compactINR(t)}</text>
+            </g>
+          );
+        })}
+        {data.map((d, i) => {
+          const h = (d.collected / niceMax) * plotH;
+          const x = padL + band * i + (band - barW) / 2;
+          const y = padT + plotH - h;
+          return (
+            <g key={d.month}>
+              <title>{`${monthLabel(d.month)}: ${formatINR(d.collected)}`}</title>
+              <rect x={x} y={y} width={barW} height={Math.max(h, d.collected ? 2 : 0)} rx="3" fill="#2563eb" className="transition-opacity hover:opacity-80" />
+              <text x={x + barW / 2} y={H - 9} textAnchor="middle" fontSize="11" fill="#64748b">{monthLabel(d.month)}</text>
+            </g>
+          );
+        })}
+      </svg>
+    </figure>
   );
 }
 
@@ -100,7 +124,7 @@ export function FinanceDashboard() {
       <div className="mt-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-900">Overdue invoices</h2>
-          <Link to="/invoices?status=CONFIRMED" className="text-sm font-medium text-primary-600 hover:text-primary-700">
+          <Link to="/invoices?status=CONFIRMED" className="link text-sm">
             View all invoices
           </Link>
         </div>
@@ -122,9 +146,9 @@ export function FinanceDashboard() {
             <TableMessage columns={4}><EmptyState title="Nothing overdue" description="Every confirmed invoice is within its payment terms." /></TableMessage>
           ) : (
             overdue.data!.data.map((inv) => (
-              <tr key={inv.id} className="hover:bg-slate-50">
+              <tr key={inv.id}>
                 <td className="td">
-                  <Link to={`/invoices/${inv.id}`} className="font-medium text-primary-700 hover:underline">{inv.number}</Link>
+                  <Link to={`/invoices/${inv.id}`} className="link">{inv.number}</Link>
                 </td>
                 <td className="td max-w-[12rem] truncate">{inv.customer?.companyName ?? inv.customerName}</td>
                 <td className="td hidden text-rose-600 sm:table-cell">{formatDate(inv.dueDate)}</td>

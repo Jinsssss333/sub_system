@@ -33,7 +33,16 @@ export const defaultSubscriptionInclude = {
   plan: true,
   lines: {
     include: {
-      product: true,
+      product: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          salesPrice: true,
+          active: true,
+          notes: true,
+        },
+      },
       variant: true,
       tax: true,
     },
@@ -82,6 +91,12 @@ export class SubscriptionsService {
         throw ApiError.notFound(
           `Product with id ${line.productId} not found`,
           'PRODUCT_NOT_FOUND'
+        );
+      }
+      if (!product.active) {
+        throw ApiError.badRequest(
+          `Product ${product.name} is not active`,
+          'PRODUCT_INACTIVE'
         );
       }
 

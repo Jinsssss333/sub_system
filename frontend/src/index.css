@@ -4,12 +4,25 @@
 
 /* Printable Invoice styling */
 @media print {
+  @page { margin: 16mm; }
+
   body {
     background-color: white !important;
     color: black !important;
   }
+
+  #root {
+    display: block !important;
+  }
+
   .no-print {
     display: none !important;
   }
-}
 
+  .print-document {
+    max-width: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+}

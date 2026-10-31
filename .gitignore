@@ -1,21 +1,20 @@
 # Dependencies
 node_modules/
+**/node_modules/
 .pnp
 .pnp.js
 
 # Environment Variables & Secrets
 .env
-.env.local
-.env.*.local
-.env.test
+.env.*
 *.env
-*.env.test
-!*.env.example
-!*.env.*.example
-backend/.env
-backend/.env.test
-!backend/.env.example
-!backend/.env.test.example
+*.env.*
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+!**/*.env.example
+!**/*.env.*.example
 
 # Production Build Outputs
 dist/
@@ -23,12 +22,15 @@ dist/
 build/
 **/build/
 out/
+**/out/
 *.tsbuildinfo
+**/*.tsbuildinfo
 
-# Vite & Framework Caches
+# Vite & Bundler Caches
 .vite/
 **/.vite/
 .cache/
+**/.cache/
 .turbo/
 
 # Logs & Diagnostics
@@ -40,6 +42,7 @@ pnpm-debug.log*
 
 # Test Coverage
 coverage/
+**/coverage/
 .nyc_output/
 
 # OS Generated Files

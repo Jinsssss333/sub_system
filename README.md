@@ -12,10 +12,11 @@
 4. [Monorepo Architecture](#-monorepo-architecture)
 5. [Data Model & ER Diagram](#-data-model--er-diagram)
 6. [Business Logic & Mathematical Invariants](#-business-logic--mathematical-invariants)
-7. [Quickstart & Local Setup](#-quickstart--local-setup)
-8. [Demo Credentials & User Roles](#-demo-credentials--user-roles)
-9. [Automated Testing & Performance Benchmarks](#-automated-testing--performance-benchmarks)
-10. [Architecture & Accounting Decisions](#-architecture--accounting-decisions)
+7. [API Specification & Endpoints](#-api-specification--endpoints)
+8. [Quickstart & Local Setup](#-quickstart--local-setup)
+9. [Demo Credentials & User Roles](#-demo-credentials--user-roles)
+10. [Automated Testing & Performance Benchmarks](#-automated-testing--performance-benchmarks)
+11. [Architecture & Accounting Decisions](#-architecture--accounting-decisions)
 
 ---
 
@@ -34,7 +35,7 @@ Every component operates completely offline with zero reliance on cloud services
 | **Monorepo** | npm Workspaces (`@brightloop/shared`, `backend`, `frontend`) |
 | **Runtime & Language** | Node.js 20+, TypeScript (ESM) |
 | **Backend API** | Express.js, Zod, bcryptjs, jsonwebtoken |
-| **ORM & Database** | Prisma ORM, PostgreSQL 16 (with native connection pooling and indexing) |
+| **ORM & Database** | Prisma ORM, PostgreSQL 16 (with native connection pooling and compound indexes) |
 | **Scheduler** | node-cron (recurring billing worker) |
 | **Frontend UI** | React 18, Vite, Tailwind CSS, TanStack Query, React Hook Form, Lucide Icons |
 | **Testing** | Vitest, Supertest, standalone verification runners |
@@ -87,6 +88,11 @@ $$\text{DRAFT} \longrightarrow \text{QUOTATION} \longrightarrow \text{CONFIRMED}
   - Total outstanding receivables
   - Overdue invoice exposures (`dueDate < today` and status `CONFIRMED`)
 - High-performance query design: Measured $p95 < 35\text{ms}$ over 20,000 invoices.
+
+### 8. Polished Design System & Responsive UI
+- **Refined Aesthetics:** Navy `#0f172a` sidebar, crisp Tailwind neutral slate surfaces, and royal blue `#2563eb` action accents.
+- **Navigation:** Integrated breadcrumb trails, sticky action bars, and user avatar dropdown menu.
+- **Responsive Widths:** Works smoothly across both desktop monitors and 375px mobile viewports.
 
 ---
 
@@ -193,6 +199,57 @@ All calculations follow pure deterministic mathematical rules:
      taxTotal = sum(lineTax)
      invoiceTotal = subtotal - discountTotal + taxTotal
 ```
+
+---
+
+## 🌐 API Specification & Endpoints
+
+All endpoints are prefixed with `/api`. Requests use `Authorization: Bearer <JWT>`. Standard response envelope is `{ data: ... }` or `{ data: [...], meta: { page, pageSize, total } }`.
+
+| Method | Endpoint | Allowed Roles | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/health` | Public | System and database reachability check |
+| `POST` | `/auth/signup` | Public | Register new customer account |
+| `POST` | `/auth/login` | Public | Authenticate user & issue JWT |
+| `POST` | `/auth/forgot-password` | Public | Request single-use 30-min password reset link |
+| `POST` | `/auth/reset-password` | Public | Set new password with reset token |
+| `GET` | `/auth/me` | All Roles | Current authenticated user profile |
+| `GET` | `/users` | Admin | List all registered accounts |
+| `POST` | `/users/staff` | Admin | Onboard an internal staff member |
+| `GET` | `/customers` | Admin, Staff | Paginated customer directory with text search |
+| `POST` | `/customers` | Admin, Staff | Create customer & linked user (returns customer ID) |
+| `GET` | `/customers/:id` | Admin, Staff, Customer | Customer details (scoped to own tenant) |
+| `GET` | `/products` | Admin, Staff | Product catalog with nested variants |
+| `POST` | `/products` | Admin | Create product with integer paise pricing |
+| `POST` | `/products/:id/variants`| Admin | Create variant (supports +₹560 Odoo variant) |
+| `GET` | `/plans` | Admin, Staff | Recurring plans catalog |
+| `POST` | `/plans` | Admin | Create plan with policy flags and committing min quantity |
+| `GET` | `/taxes` | Admin, Staff | Tax rules (basis points: 500, 1200, 1800) |
+| `POST` | `/taxes` | Admin | Create tax rate |
+| `GET` | `/discounts` | Admin, Staff | Discount rules |
+| `POST` | `/discounts` | Admin | Create fixed or percentage discount |
+| `GET` | `/templates` | Admin, Staff | Quotation templates |
+| `POST` | `/templates` | Admin | Create quotation template with validity days |
+| `GET` | `/subscriptions` | Admin, Staff | Filterable paginated subscriptions list |
+| `POST` | `/subscriptions` | Admin, Staff | Create subscription from lines or template |
+| `GET` | `/subscriptions/:id` | Admin, Staff, Customer | Subscription details (customer isolated) |
+| `POST` | `/subscriptions/:id/transition` | Admin, Staff | State transition (`to: QUOTATION\|CONFIRMED\|ACTIVE\|CLOSED`) |
+| `POST` | `/subscriptions/:id/pause` | Admin, Staff, Customer | Pause active subscription |
+| `POST` | `/subscriptions/:id/resume` | Admin, Staff, Customer | Resume paused subscription |
+| `POST` | `/subscriptions/:id/renew` | Admin, Staff, Customer | Clone subscription into a new Draft |
+| `GET` | `/me/subscriptions` | Customer | Customer self-service subscription list |
+| `GET` | `/invoices` | Admin, Staff | Invoices directory with status & date filters |
+| `POST` | `/subscriptions/:id/invoices` | Admin, Staff | Generate invoice for next due period |
+| `GET` | `/invoices/:id` | Admin, Staff, Customer | Invoice line items & balance breakdown |
+| `POST` | `/invoices/:id/confirm` | Admin, Staff | Lock and confirm draft invoice |
+| `POST` | `/invoices/:id/cancel` | Admin, Staff | Cancel unpaid invoice (`amountPaid == 0`) |
+| `GET` | `/invoices/:id/print` | Admin, Staff, Customer | Printable server-rendered invoice HTML |
+| `GET` | `/me/invoices` | Customer | Customer self-service invoices list |
+| `POST` | `/invoices/:id/payments` | Admin, Staff | Record payment against confirmed invoice |
+| `GET` | `/payments` | Admin, Staff | Transactional payments ledger |
+| `GET` | `/reports/summary` | Admin, Staff | Financial totals (active count, revenue, outstanding, overdue) |
+| `GET` | `/reports/overdue` | Admin, Staff | Overdue invoices list with days past due |
+| `POST` | `/admin/run-billing` | Admin | Trigger background billing catch-up run |
 
 ---
 

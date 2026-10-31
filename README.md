@@ -284,12 +284,12 @@ Adopted directly from the **Handoff Specification (Section 13)**:
                         └──────────┘└──────────┘└────────┘└────────┘
 ```
 
-| Member | Domain Ownership | Branch Name | Responsibilities |
-| :--- | :--- | :--- | :--- |
-| **Person 1** | **Identity & Catalog Owner** | `feature/identity-catalog` | Auth, JWT, RBAC, Users, Customers, Products, Variants (+₹560 Odoo variant), Plans, Taxes, Discounts, and shared Zod request validation schemas. |
-| **Person 2** | **Subscription Lifecycle Owner** | `feature/subscriptions` | Quotation templates, subscription creation, lifecycle state machine (`Draft` $\rightarrow$ `Quotation` $\rightarrow$ `Confirmed` $\rightarrow$ `Active` $\rightarrow$ `Closed`), pause/resume/renew, and date clamping (`dates.ts`). |
-| **Person 3** | **Billing & Financial Engine Owner** | `feature/billing-engine` | Pure pricing logic (`pricing.ts`), transactional `generateInvoice()`, discount allocation, payment recording, scheduler, and SQL financial aggregates (`/reports/summary`). |
-| **Person 4** | **Frontend & Integration Owner** | `feature/frontend-integration` | Shared design system, App shell, role-based views (Admin, Staff, Customer Portal), TanStack Query hooks, print view, and browser acceptance testing. |
+| Member | Domain Ownership | Branch Name | Responsibilities | Individual Guide |
+| :--- | :--- | :--- | :--- | :--- |
+| **Person 1** | **Identity & Catalog Owner** | `feature/identity-catalog` | Auth, JWT, RBAC, Users, Customers, Products, Variants (+₹560 Odoo variant), Plans, Taxes, Discounts, and shared Zod request validation schemas. | [👉 Person 1 Guide](./README_PERSON_1_IDENTITY_CATALOG.md) |
+| **Person 2** | **Subscription Lifecycle Owner** | `feature/subscriptions` | Quotation templates, subscription creation, lifecycle state machine (`Draft` $\rightarrow$ `Quotation` $\rightarrow$ `Confirmed` $\rightarrow$ `Active` $\rightarrow$ `Closed`), pause/resume/renew, and date clamping (`dates.ts`). | [👉 Person 2 Guide](./README_PERSON_2_SUBSCRIPTIONS.md) |
+| **Person 3** | **Billing & Financial Engine Owner** | `feature/billing-engine` | Pure pricing logic (`pricing.ts`), transactional `generateInvoice()`, discount allocation, payment recording, scheduler, and SQL financial aggregates (`/reports/summary`). | [👉 Person 3 Guide](./README_PERSON_3_BILLING_FINANCE.md) |
+| **Person 4** | **Frontend & Integration Owner** | `feature/frontend-integration` | Shared design system, App shell, role-based views (Admin, Staff, Customer Portal), TanStack Query hooks, print view, and browser acceptance testing. | [👉 Person 4 Guide](./README_PERSON_4_FRONTEND_INTEGRATION.md) |
 
 ### Collaboration Rules:
 1. **Schema Integrity:** Person 1 owns `schema.prisma` and migrations. No teammate independently edits the database schema.

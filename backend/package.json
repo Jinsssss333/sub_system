@@ -11,7 +11,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "billing:run": "tsx src/jobs/billing.job.ts",
-    "test": "vitest run"
+    "test": "vitest run --dir test"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

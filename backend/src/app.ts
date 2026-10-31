@@ -11,9 +11,11 @@ import { plansRouter } from './modules/plans/plans.routes.js';
 import { taxesRouter } from './modules/taxes/taxes.routes.js';
 import { discountsRouter } from './modules/discounts/discounts.routes.js';
 
-// Person 2 routers (Subscriptions)
 import { templatesRouter } from './modules/templates/templates.routes.js';
-import { subscriptionsRouter } from './modules/subscriptions/subscriptions.routes.js';
+import {
+  subscriptionsRouter,
+  meSubscriptionsRouter,
+} from './modules/subscriptions/subscriptions.routes.js';
 
 // Person 3 routers (Billing & Finance Engine)
 import { invoicesRouter } from './modules/invoices/invoices.routes.js';
@@ -46,6 +48,7 @@ app.use('/api/discounts', discountsRouter);
 // Person 2: Subscriptions & Templates routes
 app.use('/api/templates', templatesRouter);
 app.use('/api/subscriptions', subscriptionsRouter);
+app.use('/api/me/subscriptions', meSubscriptionsRouter);
 
 // Person 3: Billing & Reports routes
 app.use('/api/invoices', invoicesRouter);

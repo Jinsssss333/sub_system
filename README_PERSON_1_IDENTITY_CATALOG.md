@@ -1,87 +1,89 @@
-# 🧑‍💻 Person 1 Guide: Identity & Catalog Owner
+# Person 1: Identity, catalog and integration foundation
 
-> **Domain:** Authentication, RBAC, Users, Customers, Catalog (Products, Variants, Plans, Taxes, Discounts), and Shared Request Schemas.  
-> **Git Branch:** `feature/identity-catalog`  
-> **Source of Truth:** [`Brightloop Logic Architecture and Implementation Handoff.md`](./Brightloop%20Logic%20Architecture%20and%20Implementation%20Handoff.md)
+Three-hour hackathon scope. Preserve working foundations; do not rewrite or switch stacks. This scope supersedes the earlier six-hour work plan, not mandatory judging requirements. Keep already-working extras, but stop expanding them.
 
----
+## Ownership
 
-## 📂 Files You Own & Touch
+- **Branch:** `feature/identity-catalog`.
+- **Own:** auth, customers, products, variants, plans, basic taxes, shared middleware and seed.
+- **Integration owner:** only you edit Prisma schema/migrations, backend app route registration, shared exports and backend dependency files. Teammates supply route exports; merge them immediately.
+- **Boundaries:** do not rewrite subscription, invoice or frontend modules. Coordinate shared changes in team chat first.
+
+## First ten minutes: freeze contracts
+
+Share these conventions with all teammates before anyone changes them.
+
+```text
+Base URL: /api
+Auth: Authorization: Bearer <JWT>
+Money: integer paise; ₹560 = 56000
+Rates: integer basis points; 18% = 1800
+Dates: YYYY-MM-DD; compare using one UTC business date
+Success: { data: ... }
+List: { data: [...], meta: { page, pageSize, total } }
+Error: { error: { code, message, fields?: { fieldName: message } } }
 ```
-backend/
-├── prisma/
-│   ├── schema.prisma       <-- ONLY Person 1 edits & runs migrations!
-│   └── seed.ts             <-- Seed master data & demo users
-└── src/
-    └── modules/
-        ├── auth/           <-- Signup, login, reset, JWT
-        ├── users/          <-- Staff creation, user listing
-        ├── customers/      <-- Customer profiles
-        ├── products/       <-- Products & Variants (+₹560 Odoo variant)
-        ├── plans/          <-- Subscription plans & policy flags
-        ├── taxes/          <-- GST tax rates (basis points)
-        └── discounts/      <-- Discount rules (fixed & percent)
+
+Lists use `q`, `page`, `pageSize` and applicable `status` filters. Cap pageSize at 100. Keep existing compatible contracts rather than renaming them.
+
+For unimplemented pricing semantics, use product charges plus a clearly displayed recurring plan base fee; product tax does not implicitly tax that fee. If existing code uses a different interpretation, resolve it with Persons 2–4 now. Do not silently alter prices halfway through integration.
+
+## Must ship
+
+- **Login:** `POST /auth/login` with `{ email, password }`; return `{ data: { token, user: { id, name, email, role, customerId } } }`. No hashes.
+- **Current user:** `GET /auth/me`; verify token and load safe user data.
+- **Roles:** ADMIN and STAFF operate subscriptions/invoices; ADMIN modifies catalog; CUSTOMER reads own records. Guards apply server-side.
+- **Customers:** `GET /customers`, `POST /customers`; expose `{ id, companyName, user: { name, email }, phone, address }`. Customer creation must return the customer ID, not just user ID.
+- **Products:** `GET /products`, `POST /products`; include variants in product results. Admin writes, staff reads.
+- **Variants:** `POST /products/:id/variants`; validate product relation and integer extra price.
+- **Plans:** `GET /plans`, `POST /plans`; price, period, minQuantity and existing policy flags.
+- **Taxes:** `GET /taxes`; seed GST 18%. Keep tax creation if already working.
+- **Validation:** required fields, nonnegative integer prices, positive quantities, email normalization and duplicate handling.
+- **Seed:** admin/staff/customer logins, 5–10 customers, a few products/plans, an Odoo variant, and representative invoice states coordinated with Person 3.
+
+Use existing safe JWT/bcrypt foundations. Never accept a requested role from public signup or log passwords/tokens.
+
+## Seed and environment
+
+Publish `.env.example` and exact local startup commands by minute 15. Never overwrite teammates' databases or run a destructive reset automatically. Use the existing database/schema; only add necessary compatible fields.
+
+Development-only demo accounts:
+
+```text
+admin@brightloop.test     Admin@1234
+staff@brightloop.test     Staff@1234
+customer@brightloop.test  Customer@1234
 ```
-> ⚠️ **No-Touch Rule:** Do not touch `modules/subscriptions/`, `modules/invoices/`, `jobs/`, or `frontend/`.
 
----
+If credentials already differ, publish those instead of resetting them. Disable demo-account shortcuts outside development.
 
-## 🎯 Core Features & Endpoints to Build
+## Defer unless already working
 
-### 1. Auth & RBAC Module (`src/modules/auth/`)
-* **`POST /api/auth/signup`**:
-  - Registers a new user with role `CUSTOMER`.
-  - Email uniqueness check (case-insensitive, store lowercase).
-  - Password validation regex: `^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{9,}$` (min 9 chars, uppercase, lowercase, special char).
-* **`POST /api/auth/login`**:
-  - Validates credentials using `bcrypt.compare`.
-  - Returns `{ data: { token, user: { id, email, name, role, customerId } } }`.
-* **`POST /api/auth/forgot-password`**:
-  - Always returns HTTP 200 (prevents email enumeration).
-  - Generates 32-byte crypto token, stores SHA-256 hash in `PasswordResetToken` (30 min expiry).
-  - Sends email to local **Mailpit** (`localhost:1025`).
-* **`POST /api/auth/reset-password`**:
-  - Validates single-use token hash, updates user's `passwordHash`, marks token used.
-* **`GET /api/auth/me`**:
-  - Returns authenticated user profile from JWT.
+- Password reset/Mailpit integration, staff management UI, elaborate signup.
+- Discount CRUD, expiry/usage-limit rules and product-scoped discount UI.
+- Large 5,000/20,000-record seed and benchmarking.
+- Generalized delete/archive management and advanced catalog configuration.
 
-### 2. Users & Customers Module (`src/modules/users/`, `src/modules/customers/`)
-* **`POST /api/users/staff`**: (Admin only via `requireRole('ADMIN')`)
-  - Creates staff member account.
-* **`GET /api/users`**: (Admin only) Lists all accounts.
-* **`GET, POST /api/customers`**: (Admin & Staff) Customer company details (name, phone, address).
+These are deadline deferrals, not assertions that the original requirements are satisfied.
 
-### 3. Catalog Module (`src/modules/products/`, `src/modules/plans/`, `src/modules/taxes/`, `src/modules/discounts/`)
-* **`POST /api/products`**: Name, Type, Sales Price (paise), Cost Price (paise), Notes.
-* **`POST /api/products/:id/variants`**:
-  - Brand variant: e.g. **Odoo Edition adds ₹560 = 56,000 paise** (`extraPrice: 56000`).
-* **`POST /api/plans`**:
-  - Name, Price (paise), Billing Period (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`), `minQuantity`.
-  - Admin flags: `autoClose` (boolean), `closable` (boolean), `pausable` (boolean), `renewable` (boolean).
-* **`POST /api/taxes`**: Name, `rateBps` (18% = 1800, 12% = 1200, 5% = 500).
-* **`POST /api/discounts`**:
-  - Name, Type (`FIXED` or `PERCENT`), Value, `minPurchase`, `minQuantity`, `startDate`, `endDate`, `usageLimit`, Scope (`PRODUCT` or `SUBSCRIPTION`).
+## Timeline from now
 
----
+| Time | Deliverable |
+| --- | --- |
+| 0–10 min | Inspect existing work; freeze payloads, pricing and route exports |
+| 10–35 min | DB works; seeded login; auth guards; GET customers/products/plans/taxes available |
+| 35–65 min | Customer/product/plan creation; register Persons 2–3 routes as they arrive |
+| 65–110 min | Fix integration/validation issues; run real role-boundary checks |
+| 110–145 min | Merge stable changes; assist full-flow test; freeze schema |
+| 145–180 min | Feature freeze, restart from documented commands, rehearse and fix blockers only |
 
-## ⏱️ Hour-by-Hour 6-Hour Plan
-* **Hour 1 (0:00 – 1:00):** Verify Docker PostgreSQL & Mailpit running. Run `npx prisma migrate dev` and test `npm run db:seed`. Verify demo accounts login in DB.
-* **Hour 2 (1:00 – 2:00):** Build Auth routes (`signup`, `login`, `me`) with Zod schemas and JWT. Test password regex.
-* **Hour 3 (2:00 – 3:00):** Build Mailpit password reset flow (`forgot-password`, `reset-password`). Check Mailpit web UI on `http://localhost:8025`.
-* **Hour 4 (3:00 – 4:00):** Build Products, Variants, Plans, Taxes, and Discounts CRUD.
-* **Hour 5 (4:00 – 4:45):** **MERGE POINT:** Open Pull Request from `feature/identity-catalog` into `dev`. Resolve any route imports in `app.ts`.
-* **Hour 6 (4:45 – 6:00):** Assist with end-to-end testing of Scene 1 (Signup/Login) and Scene 2 (Catalog setup).
+Do not wait until the end to merge. Small, compiling commits and shared payload examples every 20–30 minutes.
 
----
+## Acceptance
 
-## 🔍 Edge Cases You Must Guard Against
-1. **Password Policy:** Reject 8-character passwords or passwords missing a special character with HTTP 400.
-2. **Duplicate Email:** Reject duplicate signups with HTTP 409 Conflict.
-3. **Role Boundary:** Ensure non-admins cannot call `POST /api/users/staff` (must return HTTP 403 Forbidden).
-4. **Offline Isolation:** Ensure NO calls to external cloud auth or CDN fonts; all mail goes to Mailpit.
-
----
-
-## 🎤 What You Explain to Hackathon Judges
-> *"I designed our relational database schema and security core. We enforce strict password hashing with bcrypt, role-based JWT guards, and a 100% offline password reset flow using local SMTP. In the catalog, all currency is modeled in exact integer paise to prevent rounding bugs, and we implemented product variants where the Odoo Edition dynamically applies the ₹560 pricing delta."*
-
+- All three seeded accounts sign in; invalid credentials fail cleanly.
+- Customer cannot create a product or list other customers.
+- Staff can load catalog options and create a customer.
+- Odoo variant extra price is exactly 56000 paise.
+- Database-backed data survives refresh/restart.
+- No production-grade security or performance claims without verification.

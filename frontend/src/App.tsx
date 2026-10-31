@@ -1,165 +1,251 @@
 import { useState } from 'react';
 import { 
   Building2, 
-  Users, 
   Package, 
-  CreditCard, 
   FileText, 
   BarChart3, 
   ShieldCheck, 
-  CheckCircle2,
-  Receipt
+  Receipt,
+  Layers,
+  Tag,
+  Sparkles
 } from 'lucide-react';
+
+import { ProductsPage } from './pages/admin/ProductsPage';
+import { PlansPage } from './pages/admin/PlansPage';
+import { DiscountsPage } from './pages/admin/DiscountsPage';
+import { SubscriptionsPage } from './pages/staff/SubscriptionsPage';
+import { InvoicesPage } from './pages/staff/InvoicesPage';
+import { CustomerPortal } from './pages/customer/CustomerPortal';
+import { FinanceDashboard } from './pages/finance/FinanceDashboard';
 
 export function App() {
   const [currentRole, setCurrentRole] = useState<'ADMIN' | 'STAFF' | 'CUSTOMER'>('ADMIN');
+  const [activeTab, setActiveTab] = useState<string>('products');
+
+  // Handle Role Switching and reset to default page of that role
+  const handleRoleSwitch = (role: 'ADMIN' | 'STAFF' | 'CUSTOMER') => {
+    setCurrentRole(role);
+    if (role === 'ADMIN') setActiveTab('products');
+    if (role === 'STAFF') setActiveTab('subscriptions');
+    if (role === 'CUSTOMER') setActiveTab('portal');
+  };
+
+  const roleUserMap = {
+    ADMIN: { name: 'System Administrator', email: 'admin@brightloop.test' },
+    STAFF: { name: 'Operations Staff', email: 'staff@brightloop.test' },
+    CUSTOMER: { name: 'Acme Retail Corp', email: 'customer@brightloop.test' },
+  };
 
   return (
-    <div className="flex h-screen bg-slate-100 font-sans">
+    <div className="flex h-screen bg-slate-100 font-sans text-slate-800 antialiased overflow-hidden">
+      
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-          <div className="bg-primary-600 p-2 rounded-lg">
-            <Building2 className="w-6 h-6 text-white" />
+      <aside className="no-print w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 z-20 border-r border-slate-800">
+        
+        {/* Brand Logo & Name */}
+        <div className="p-5 border-b border-slate-800 flex items-center gap-3">
+          <div className="bg-gradient-to-tr from-indigo-600 to-indigo-500 p-2.5 rounded-xl shadow-md">
+            <Building2 className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-bold text-sm tracking-wide">BRIGHTLOOP</h1>
-            <p className="text-xs text-slate-400">Subscription Engine</p>
+            <h1 className="font-extrabold text-sm tracking-wide text-white">BRIGHTLOOP</h1>
+            <p className="text-[11px] text-indigo-400 font-medium">Subscription Platform</p>
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        {/* Dynamic Navigation per Role */}
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {currentRole === 'ADMIN' && (
             <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Admin Panel</div>
-              <a href="#catalog" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <Package className="w-4 h-4" /> Products & Plans
-              </a>
-              <a href="#users" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Users className="w-4 h-4" /> Staff & Users
-              </a>
-              <a href="#finance" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                Catalog & Config
+              </div>
+              <button
+                onClick={() => setActiveTab('products')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'products'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <Package className="w-4 h-4" /> Products & Variants
+              </button>
+              <button
+                onClick={() => setActiveTab('plans')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'plans'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <Layers className="w-4 h-4" /> Subscription Plans
+              </button>
+              <button
+                onClick={() => setActiveTab('discounts')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'discounts'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <Tag className="w-4 h-4" /> Discounts & Taxes
+              </button>
+
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mt-5 mb-2">
+                Executive
+              </div>
+              <button
+                onClick={() => setActiveTab('finance')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'finance'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
                 <BarChart3 className="w-4 h-4" /> Finance Dashboard
-              </a>
+              </button>
             </>
           )}
 
           {currentRole === 'STAFF' && (
             <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Operations</div>
-              <a href="#subscriptions" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <FileText className="w-4 h-4" /> Subscriptions
-              </a>
-              <a href="#invoices" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                Operations
+              </div>
+              <button
+                onClick={() => setActiveTab('subscriptions')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'subscriptions'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <FileText className="w-4 h-4" /> Subscriptions Lifecycle
+              </button>
+              <button
+                onClick={() => setActiveTab('invoices')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'invoices'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
                 <Receipt className="w-4 h-4" /> Invoices & Billing
-              </a>
-              <a href="#payments" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <CreditCard className="w-4 h-4" /> Payments
-              </a>
+              </button>
             </>
           )}
 
           {currentRole === 'CUSTOMER' && (
             <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Customer Portal</div>
-              <a href="#my-subs" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <FileText className="w-4 h-4" /> My Subscriptions
-              </a>
-              <a href="#my-invoices" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Receipt className="w-4 h-4" /> My Invoices
-              </a>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 mb-2">
+                Client Portal
+              </div>
+              <button
+                onClick={() => setActiveTab('portal')}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeTab === 'portal'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+              >
+                <FileText className="w-4 h-4" /> My Account & Invoices
+              </button>
             </>
           )}
         </nav>
 
-        <div className="p-4 border-t border-slate-800 text-xs text-slate-400">
-          Odoo Hackathon 2026 Edition
+        {/* User Card in Sidebar */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950/50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-indigo-300 border border-slate-700">
+              {currentRole[0]}
+            </div>
+            <div className="overflow-hidden">
+              <p className="text-xs font-bold text-slate-200 truncate">{roleUserMap[currentRole].name}</p>
+              <p className="text-[10px] text-slate-400 font-mono truncate">{roleUserMap[currentRole].email}</p>
+            </div>
+          </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar with Demo Role Switcher */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-          <div className="flex items-center gap-2">
+        
+        {/* Topbar with Live Role Switcher */}
+        <header className="no-print h-16 bg-white border-b border-slate-200/80 flex items-center justify-between px-6 z-10">
+          <div className="flex items-center gap-3">
             <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span className="text-sm font-medium text-slate-700">Role View:</span>
-            <span className="font-semibold text-sm bg-slate-100 text-slate-800 px-2 py-0.5 rounded border">
-              {currentRole}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-slate-500">Perspective:</span>
+              <span className="font-bold text-xs bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200">
+                {currentRole} VIEW
+              </span>
+            </div>
           </div>
 
           {/* Quick Role Switcher for Hackathon Judges */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 mr-2 font-medium">Switch View:</span>
-            <button
-              onClick={() => setCurrentRole('ADMIN')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'ADMIN' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => setCurrentRole('STAFF')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'STAFF' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Staff
-            </button>
-            <button
-              onClick={() => setCurrentRole('CUSTOMER')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'CUSTOMER' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Customer
-            </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              Demo Role Switcher:
+            </span>
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                onClick={() => handleRoleSwitch('ADMIN')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  currentRole === 'ADMIN'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Admin
+              </button>
+              <button
+                onClick={() => handleRoleSwitch('STAFF')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  currentRole === 'STAFF'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Staff
+              </button>
+              <button
+                onClick={() => handleRoleSwitch('CUSTOMER')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                  currentRole === 'CUSTOMER'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Customer
+              </button>
+            </div>
           </div>
         </header>
 
-        {/* Workspace Placeholder */}
-        <main className="flex-1 p-8 overflow-auto">
-          <div className="max-w-5xl mx-auto">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-              <div className="flex items-center gap-3 text-emerald-600 mb-4">
-                <CheckCircle2 className="w-8 h-8" />
-                <h2 className="text-2xl font-bold text-slate-900">Foundation Ready for 4-Person Sprint</h2>
-              </div>
-              <p className="text-slate-600 mb-6">
-                The core monorepo, Docker PostgreSQL environment, Prisma database schema, and frontend layout are now set up on the <code className="bg-slate-100 px-2 py-1 rounded text-primary-600 font-mono text-sm">dev</code> branch.
-              </p>
+        {/* View Content Area */}
+        <main className="flex-1 p-6 sm:p-8 overflow-y-auto">
+          <div className="max-w-7xl mx-auto">
+            {/* Admin Pages */}
+            {currentRole === 'ADMIN' && activeTab === 'products' && <ProductsPage />}
+            {currentRole === 'ADMIN' && activeTab === 'plans' && <PlansPage />}
+            {currentRole === 'ADMIN' && activeTab === 'discounts' && <DiscountsPage />}
+            {currentRole === 'ADMIN' && activeTab === 'finance' && <FinanceDashboard />}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 1: Identity & Catalog</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/identity-catalog</code></p>
-                  <p className="text-slate-500 text-xs">Auth, JWT, RBAC, Users, Products (+₹560 Odoo variant), Plans, Taxes, Discounts.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 2: Subscriptions Lifecycle</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/subscriptions</code></p>
-                  <p className="text-slate-500 text-xs">Templates, Quotes, Subscriptions State Machine (Draft → Closed), Pause/Renew, Date math.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 3: Billing & Finance Engine</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/billing-engine</code></p>
-                  <p className="text-slate-500 text-xs">Pricing math, idempotent invoice generator, payment recording, scheduler & SQL aggregates.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🎨 Person 4: Frontend & Integration</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/frontend-integration</code></p>
-                  <p className="text-slate-500 text-xs">Complete UI across Admin, Staff, and Customer Portal, TanStack Query, and Live Pitch Lead.</p>
-                </div>
-              </div>
-            </div>
+            {/* Staff Pages */}
+            {currentRole === 'STAFF' && activeTab === 'subscriptions' && <SubscriptionsPage />}
+            {currentRole === 'STAFF' && activeTab === 'invoices' && <InvoicesPage />}
+
+            {/* Customer Portal */}
+            {currentRole === 'CUSTOMER' && <CustomerPortal />}
           </div>
         </main>
       </div>
+
     </div>
   );
 }
 
 export default App;
-

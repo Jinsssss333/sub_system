@@ -1,10 +1,10 @@
-import React from 'react';
+import type { ReactNode } from 'react';
 
 interface StatCardProps {
   title: string;
   value: string;
   subtitle?: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   trend?: {
     value: string;
     positive: boolean;

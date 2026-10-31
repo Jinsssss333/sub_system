@@ -154,7 +154,8 @@ frontend/vite.config.ts
 | 1 Identity | existing, fixed | dc31025 |
 | 2 Catalog | existing, fixed + built (discounts) | c8bd88e |
 | 3 Subscriptions | existing, fixed | 69c9b59 |
-| 4 Financial core | existing, fixed | see below |
+| 4 Financial core | existing, fixed | 5b87a33 |
+| 5 Collection | existing, fixed + built (print, ledger) | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -249,4 +250,19 @@ $ npm run typecheck      -> exit 0
 $ npx eslint .           -> exit 0, ✖ 28 problems (0 errors, 28 warnings)
 $ npm run build          -> exit 0
 $ npm test -w backend    -> Test Files 9 passed (9) | Tests 64 passed (64)
+```
+
+### Gate 5 — Collection: existing, fixed; print view and payment ledger built
+
+Existing and kept: confirm (zero total → PAID without a receipt), cancel (unpaid only), send to Mailpit, payment recording with an invoice row lock and balance check.
+Fixed: confirm and cancel are compare-and-set; invoice detail ownership moved into the WHERE clause; `/api/me/invoices` query validated (bad status was a 500, now 400); payments use the shared contract (whole paise, positive, date not in the future); send requires a confirmed invoice, escapes all text and reports 503 when Mailpit is down instead of claiming success; list responses no longer embed every line and payment.
+Built: `GET /api/invoices/:id/print` — server-rendered, self-contained print-ready HTML with every interpolated value passed through `escapeHtml`, ownership-scoped, served with a restrictive CSP; `GET /api/payments` paginated ledger.
+
+Tests (`test/collection.test.ts`, 9): single confirmation + zero-total PAID with no payment row; cancel only unpaid; email to the customer with `<script>` escaped and drafts refused; print view escapes `<script>`, `<img onerror>` and `<b>` in description/company/address; partial → final payment → PAID → further payment 409; overpayment/zero/negative/fractional/draft/customer/future-date rejections; ledger pagination; **concurrency test (2): two simultaneous ₹700 payments on a ₹1,000 invoice → exactly one succeeds, `amountPaid` ₹700, one payment row**; customer invoice list/detail/print isolation, staff list 403, bad status 400.
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 27 problems (0 errors, 27 warnings)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 10 passed (10) | Tests 73 passed (73)
 ```

@@ -1,4 +1,4 @@
-import { InvoiceStatus, Role } from '@prisma/client';
+import { InvoiceStatus, Prisma, Role } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../config/db.js';
@@ -8,7 +8,9 @@ import { requireRole } from '../../middleware/requireRole.js';
 import { validate } from '../../middleware/validate.js';
 import { cancelInvoice, confirmInvoice, generateInvoice, FinanceError } from './invoices.service.js';
 import { recordPayment } from '../payments/payments.service.js';
-import { PaymentMethod } from '@prisma/client';
+import { paymentBody } from '@brightloop/shared';
+import { escapeHtml } from '../../utils/html.js';
+import { renderInvoiceHtml, formatPaise } from './invoice.render.js';
 
 export const invoicesRouter = Router();
 
@@ -36,16 +38,21 @@ const generateSubscriptionInvoiceSchema = z.object({
 
 const paymentSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
-  body: z.object({
-    method: z.nativeEnum(PaymentMethod),
-    amount: z.number().int().positive(),
-    paidOn: z.coerce.date(),
-    note: z.string().trim().max(1000).optional(),
+  body: paymentBody,
+});
+
+const myInvoicesSchema = z.object({
+  query: z.object({
+    status: z.nativeEnum(InvoiceStatus).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(10),
   }),
 });
 
-const escapeHtml = (value: string) =>
-  value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
+/** Customers can only ever match their own invoices: ownership is in the WHERE clause. */
+function invoiceScope(user: { role: Role; customerId?: string }) {
+  return user.role === Role.CUSTOMER ? { customerId: user.customerId ?? '__none__' } : {};
+}
 
 // Customer self-service invoices helper
 async function getCustomerInvoices(customerId: string, status?: InvoiceStatus, page = 1, pageSize = 10) {
@@ -72,6 +79,7 @@ meInvoicesRouter.get(
   '/',
   authMiddleware,
   requireRole(Role.CUSTOMER),
+  validate(myInvoicesSchema),
   async (req, res, next) => {
     try {
       if (!req.user!.customerId) {
@@ -107,7 +115,7 @@ subscriptionInvoicesRouter.post(
 );
 
 // Customer portal alias: GET /api/invoices/me
-invoicesRouter.get('/me', authMiddleware, requireRole(Role.CUSTOMER), async (req, res, next) => {
+invoicesRouter.get('/me', authMiddleware, requireRole(Role.CUSTOMER), validate(myInvoicesSchema), async (req, res, next) => {
   try {
     if (!req.user!.customerId) {
       throw new FinanceError('Customer profile not associated with this account', 404, 'CUSTOMER_NOT_FOUND');
@@ -139,7 +147,7 @@ invoicesRouter.get(
         dueDate?: Date;
       };
 
-      const where: any = {};
+      const where: Prisma.InvoiceWhereInput = {};
       if (status) where.status = status;
       if (customerId) where.customerId = customerId;
       if (dueDate) {
@@ -162,7 +170,7 @@ invoicesRouter.get(
           orderBy: { issueDate: 'desc' },
           skip: (page - 1) * pageSize,
           take: pageSize,
-          include: { lines: true, customer: true, payments: true },
+          include: { customer: { select: { id: true, companyName: true } } },
         }),
       ]);
 
@@ -188,22 +196,17 @@ invoicesRouter.get(
   validate(idSchema),
   async (req, res, next) => {
     try {
-      const invoice = await prisma.invoice.findUnique({
-        where: { id: req.params.id },
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: req.params.id, ...invoiceScope(req.user!) },
         include: {
           lines: true,
-          customer: { include: { user: true } },
+          customer: { include: { user: { select: { id: true, name: true, email: true } } } },
           payments: { orderBy: { paidOn: 'desc' } },
-          subscription: { include: { plan: true } },
+          subscription: { select: { id: true, number: true, plan: { select: { name: true, billingPeriod: true } } } },
         },
       });
 
       if (!invoice) {
-        throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
-      }
-
-      // Customer isolation: 404 if accessing another customer's invoice
-      if (req.user!.role === Role.CUSTOMER && invoice.customerId !== req.user!.customerId) {
         throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
       }
 
@@ -254,7 +257,7 @@ invoicesRouter.post(
   validate(paymentSchema),
   async (req, res, next) => {
     try {
-      const result = await recordPayment(req.params.id, req.body);
+      const result = await recordPayment(req.params.id, { ...req.body, paidOn: new Date(req.body.paidOn) });
       res.status(201).json({ data: result });
     } catch (error) {
       next(error);
@@ -272,17 +275,41 @@ invoicesRouter.post(
     try {
       const invoice = await prisma.invoice.findUnique({
         where: { id: req.params.id },
-        include: { customer: { include: { user: true } } },
+        include: { customer: { include: { user: { select: { name: true, email: true } } } } },
       });
       if (!invoice) throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
+      if (invoice.status === 'DRAFT') throw new FinanceError('Confirm the invoice before sending it', 409, 'INVALID_INVOICE_STATE');
       if (invoice.status === 'CANCELLED') throw new FinanceError('Cancelled invoices cannot be sent', 409, 'INVALID_INVOICE_STATE');
 
-      await sendEmail({
+      const delivery = await sendEmail({
         to: invoice.customer.user.email,
         subject: `Brightloop invoice ${invoice.number}`,
-        html: `<p>Invoice <strong>${escapeHtml(invoice.number)}</strong> total: ₹${(invoice.total / 100).toFixed(2)}</p>`,
+        text: `Invoice ${invoice.number}\nTotal: ${formatPaise(invoice.total)}\nBalance due: ${formatPaise(invoice.total - invoice.amountPaid)}\nDue date: ${invoice.dueDate.toISOString().slice(0, 10)}`,
+        html: `<p>Hello ${escapeHtml(invoice.customer.companyName ?? invoice.customer.user.name)},</p><p>Invoice <strong>${escapeHtml(invoice.number)}</strong> for ${escapeHtml(formatPaise(invoice.total))} is due on ${escapeHtml(invoice.dueDate.toISOString().slice(0, 10))}.</p><p>Balance due: ${escapeHtml(formatPaise(invoice.total - invoice.amountPaid))}</p>`,
       });
+      if (!delivery.delivered) throw new FinanceError('Email server (Mailpit) is not reachable on localhost:1025', 503, 'MAIL_UNAVAILABLE');
       res.json({ data: { message: 'Invoice email sent' } });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Printable HTML invoice. Every interpolated value is HTML-escaped.
+invoicesRouter.get(
+  '/:id/print',
+  authMiddleware,
+  requireRole(Role.ADMIN, Role.STAFF, Role.CUSTOMER),
+  validate(idSchema),
+  async (req, res, next) => {
+    try {
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: req.params.id, ...invoiceScope(req.user!) },
+        include: { lines: true, payments: { orderBy: { paidOn: 'asc' } }, customer: { include: { user: { select: { name: true, email: true } } } }, subscription: { select: { number: true } } },
+      });
+      if (!invoice) throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'");
+      res.type('html').send(renderInvoiceHtml(invoice));
     } catch (error) {
       next(error);
     }

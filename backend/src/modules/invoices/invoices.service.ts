@@ -248,26 +248,27 @@ async function generateInvoiceTx(subscriptionId: string, requestedPeriod: Date |
   });
 }
 
+/** DRAFT → CONFIRMED (or PAID when the total is zero). Compare-and-set prevents double confirmation. */
 export async function confirmInvoice(invoiceId: string) {
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
   if (invoice.status !== 'DRAFT') throw new FinanceError('Only draft invoices can be confirmed', 409, 'INVALID_INVOICE_STATE');
-  return prisma.invoice.update({
-    where: { id: invoiceId },
+  const result = await prisma.invoice.updateMany({
+    where: { id: invoiceId, status: 'DRAFT' },
     data: { status: invoice.total === 0 ? 'PAID' : 'CONFIRMED' },
-    include: { lines: true, customer: true, payments: true },
   });
+  if (result.count !== 1) throw new FinanceError('Invoice changed concurrently; reload and try again', 409, 'CONCURRENT_UPDATE');
+  return prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: invoiceInclude });
 }
 
+/** Cancel an unpaid DRAFT/CONFIRMED invoice. The billed period stays recorded, so it is never re-billed. */
 export async function cancelInvoice(invoiceId: string) {
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
-  if (invoice.amountPaid !== 0 || !['DRAFT', 'CONFIRMED'].includes(invoice.status)) {
-    throw new FinanceError('Only unpaid draft or confirmed invoices can be cancelled', 409, 'INVALID_INVOICE_STATE');
-  }
-  return prisma.invoice.update({
-    where: { id: invoiceId },
+  const result = await prisma.invoice.updateMany({
+    where: { id: invoiceId, amountPaid: 0, status: { in: ['DRAFT', 'CONFIRMED'] } },
     data: { status: 'CANCELLED' },
-    include: { lines: true, customer: true, payments: true },
   });
+  if (result.count !== 1) throw new FinanceError('Only unpaid draft or confirmed invoices can be cancelled', 409, 'INVALID_INVOICE_STATE');
+  return prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: invoiceInclude });
 }

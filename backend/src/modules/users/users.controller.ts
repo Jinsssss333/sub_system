@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import * as usersService from './users.service.js';
+import { ListUsersQuery } from './users.schema.js';
 
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await usersService.listUsers(req.query as any);
+    const result = await usersService.listUsers(req.query as unknown as ListUsersQuery);
     return res.json(result);
   } catch (error) {
     return next(error);

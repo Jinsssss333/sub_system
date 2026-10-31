@@ -150,7 +150,8 @@ frontend/vite.config.ts
 
 | Gate | Status | Commit |
 | --- | --- | --- |
-| 0 Foundation | existing, fixed | see below |
+| 0 Foundation | existing, fixed | e24ec18 |
+| 1 Identity | existing, fixed | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -174,4 +175,18 @@ $ npm run typecheck                            -> exit 0
 $ npx eslint .                                 -> ✖ 41 problems (0 errors, 41 warnings)   [warnings: legacy `any`]
 $ npm run build                                -> exit 0 (shared, backend tsc, frontend vite ✓ built)
 $ npm test -w backend                          -> Test Files 4 passed (4) | Tests 11 passed (11)
+```
+
+### Gate 1 — Identity: existing, fixed
+
+Existing and kept: signup (CUSTOMER role, lowercase email, 409 duplicates), login, `/auth/me`, admin-only staff creation, user list.
+Built: `POST /api/auth/forgot-password` (always the same 200; 32-byte random token, only its SHA-256 stored, 30-minute expiry, older links invalidated, link mailed to Mailpit), `POST /api/auth/reset-password` (atomic single-use claim). Fixed: login now spends bcrypt time for unknown emails too; JWT pinned to HS256 and expiry from `JWT_EXPIRES_IN`; staff creation uses the shared schema and `ApiError`; simple per-IP limit (20/min) on login, signup, forgot and reset.
+
+Tests (`test/identity.test.ts`, 15): signup success + no hash leak, 4 password-policy rejections, case-insensitive duplicate 409, role self-assignment rejected, login + me, identical errors for unknown email vs wrong password, tampered token 401, admin creates staff while staff/customer get 403 + paginated list, forgot-password non-enumeration, hash-only storage + single use + old password invalid, expiry and supersession, no token in any console output.
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 38 problems (0 errors, 38 warnings)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 5 passed (5) | Tests 26 passed (26)
 ```

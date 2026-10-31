@@ -28,3 +28,21 @@ export async function me(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+
+export async function forgotPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    await authService.requestPasswordReset(req.body);
+    return res.status(200).json({ data: { message: 'If that email is registered, a reset link is on its way.' } });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function resetPassword(req: Request, res: Response, next: NextFunction) {
+  try {
+    await authService.resetPassword(req.body);
+    return res.status(200).json({ data: { message: 'Password updated. You can sign in now.' } });
+  } catch (error) {
+    return next(error);
+  }
+}

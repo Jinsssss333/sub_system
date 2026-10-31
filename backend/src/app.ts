@@ -9,14 +9,20 @@ import { customersRouter } from './modules/customers/customers.routes.js';
 import { productsRouter } from './modules/products/products.routes.js';
 import { plansRouter } from './modules/plans/plans.routes.js';
 import { taxesRouter } from './modules/taxes/taxes.routes.js';
-import { discountsRouter } from './modules/discounts/discounts.routes.js';
 
-// Person 2 routers (Subscriptions)
+// Person 2 routers (Subscriptions & Templates)
 import { templatesRouter } from './modules/templates/templates.routes.js';
-import { subscriptionsRouter } from './modules/subscriptions/subscriptions.routes.js';
+import {
+  subscriptionsRouter,
+  meSubscriptionsRouter,
+} from './modules/subscriptions/subscriptions.routes.js';
 
 // Person 3 routers (Billing & Finance Engine)
-import { invoicesRouter } from './modules/invoices/invoices.routes.js';
+import {
+  invoicesRouter,
+  meInvoicesRouter,
+  subscriptionInvoicesRouter,
+} from './modules/invoices/invoices.routes.js';
 import { paymentsRouter } from './modules/payments/payments.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
 
@@ -41,14 +47,16 @@ app.use('/api/customers', customersRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/plans', plansRouter);
 app.use('/api/taxes', taxesRouter);
-app.use('/api/discounts', discountsRouter);
 
 // Person 2: Subscriptions & Templates routes
 app.use('/api/templates', templatesRouter);
 app.use('/api/subscriptions', subscriptionsRouter);
+app.use('/api/subscriptions', subscriptionInvoicesRouter);
+app.use('/api/me/subscriptions', meSubscriptionsRouter);
 
 // Person 3: Billing & Reports routes
 app.use('/api/invoices', invoicesRouter);
+app.use('/api/me/invoices', meInvoicesRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/reports', reportsRouter);
 

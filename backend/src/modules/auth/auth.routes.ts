@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import { validate } from '../../middleware/validate.js';
+import { authMiddleware } from '../../middleware/auth.js';
+import { loginSchema, signupSchema } from './auth.schema.js';
+import * as authController from './auth.controller.js';
 
 export const authRouter = Router();
 
-// Person 1 will implement: signup, login, forgot-password, reset-password, me
-authRouter.get('/me', (req, res) => {
-  res.json({ message: 'Auth module ready for Person 1' });
-});
-
+authRouter.post('/login', validate(loginSchema), authController.login);
+authRouter.post('/signup', validate(signupSchema), authController.signup);
+authRouter.get('/me', authMiddleware, authController.me);

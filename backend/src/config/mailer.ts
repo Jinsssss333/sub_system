@@ -16,14 +16,24 @@ export async function sendEmail({
   subject: string;
   html: string;
 }) {
-  const info = await transporter.sendMail({
-    from: '"Brightloop Billing" <billing@brightloop.test>',
-    to,
-    subject,
-    html,
-  });
+  try {
+    const info = await transporter.sendMail({
+      from: '"Brightloop Billing" <billing@brightloop.test>',
+      to,
+      subject,
+      html,
+    });
 
-  console.log(`✉️ Email dispatched to ${to} (MessageId: ${info.messageId})`);
-  return info;
+    console.log(`✉️ Email dispatched to ${to} (MessageId: ${info.messageId})`);
+    return info;
+  } catch (error) {
+    console.warn(`⚠️ SMTP server (Mailpit) not reachable at ${env.SMTP_HOST}:${env.SMTP_PORT}. Falling back to terminal display:`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`📧 TO: ${to}`);
+    console.log(`📌 SUBJECT: ${subject}`);
+    console.log(`📄 CONTENT:\n${html}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`);
+    return { messageId: 'mock-local-console-id' };
+  }
 }
 

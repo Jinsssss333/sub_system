@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { 
   Building2, 
   Users, 
@@ -140,7 +140,7 @@ export function App() {
                 <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
                   <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 2: Subscriptions Lifecycle</div>
                   <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/subscriptions</code></p>
-                  <p className="text-slate-500 text-xs">Templates, Quotes, Subscriptions State Machine (Draft $\rightarrow$ Closed), Pause/Renew, Date math.</p>
+                  <p className="text-slate-500 text-xs">Templates, Quotes, Subscriptions State Machine (Draft → Closed), Pause/Renew, Date math.</p>
                 </div>
                 <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
                   <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 3: Billing & Finance Engine</div>

@@ -18,7 +18,11 @@ import {
 } from './modules/subscriptions/subscriptions.routes.js';
 
 // Person 3 routers (Billing & Finance Engine)
-import { invoicesRouter } from './modules/invoices/invoices.routes.js';
+import {
+  invoicesRouter,
+  meInvoicesRouter,
+  subscriptionInvoicesRouter,
+} from './modules/invoices/invoices.routes.js';
 import { paymentsRouter } from './modules/payments/payments.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
 import { adminBillingRouter } from './jobs/billing.job.js';
@@ -48,10 +52,12 @@ app.use('/api/taxes', taxesRouter);
 // Person 2: Subscriptions & Templates routes
 app.use('/api/templates', templatesRouter);
 app.use('/api/subscriptions', subscriptionsRouter);
+app.use('/api/subscriptions', subscriptionInvoicesRouter);
 app.use('/api/me/subscriptions', meSubscriptionsRouter);
 
 // Person 3: Billing & Reports routes
 app.use('/api/invoices', invoicesRouter);
+app.use('/api/me/invoices', meInvoicesRouter);
 app.use('/api', paymentsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/admin', adminBillingRouter);

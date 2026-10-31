@@ -11,6 +11,7 @@ node_modules/
 # Production build outputs
 dist/
 build/
+frontend/.vite/
 
 # Logs & temp
 npm-debug.log*
@@ -23,3 +24,6 @@ yarn-error.log*
 .vscode/
 .idea/
 
+# Local test env
+.env.test
+backend/.env.test

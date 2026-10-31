@@ -1,4 +1,5 @@
-import { Prisma, SubscriptionStatus } from '@prisma/client';
+import { BillingPeriod, Prisma, SubscriptionStatus } from '@prisma/client';
+import { LIMITS } from '@brightloop/shared';
 import { prisma } from '../../config/db.js';
 import { ApiError } from '../../utils/errors.js';
 import { addDays, addPeriod } from '../../utils/dates.js';
@@ -68,6 +69,38 @@ export const defaultSubscriptionInclude = {
   },
 };
 
+function assertLineWithinLimit(amount: number) {
+  if (!Number.isSafeInteger(amount) || amount > LIMITS.MAX_LINE_AMOUNT_PAISE) {
+    throw ApiError.badRequest('A line total cannot exceed ₹10,00,000.00 (quantity × unit price)', 'LINE_AMOUNT_TOO_LARGE');
+  }
+}
+
+/** Only SUBSCRIPTION-scoped discounts are attached to a subscription; PRODUCT discounts apply automatically. */
+async function validateSubscriptionDiscounts(discountIds: string[] | undefined) {
+  const ids = [...new Set(discountIds ?? [])];
+  if (ids.length === 0) return ids;
+  const found = await prisma.discount.findMany({ where: { id: { in: ids }, scope: 'SUBSCRIPTION' }, select: { id: true } });
+  if (found.length !== ids.length) {
+    throw ApiError.badRequest('Only existing subscription-wide discounts can be attached', 'INVALID_DISCOUNT');
+  }
+  return ids;
+}
+
+const dayStart = (value: Date) => new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+
+/**
+ * First billing anchor on or after `today`, stepping from `from` along the
+ * subscription's anchor (startDate). Periods skipped while paused are never billed.
+ */
+export function nextAnchorOnOrAfter(from: Date, period: BillingPeriod, anchor: Date, today: Date): Date {
+  let cursor = dayStart(from);
+  const target = dayStart(today);
+  for (let guard = 0; cursor < target && guard < 20_000; guard += 1) {
+    cursor = addPeriod(cursor, period, anchor);
+  }
+  return cursor;
+}
+
 export class SubscriptionsService {
   /**
    * Helper to resolve and validate line prices from catalog to ensure server-side pricing integrity.
@@ -78,7 +111,6 @@ export class SubscriptionsService {
       variantId?: string | null;
       quantity: number;
       taxId?: string | null;
-      unitPrice?: number;
     }[]
   ) {
     const resolvedLines = [];
@@ -124,19 +156,17 @@ export class SubscriptionsService {
         const tax = await prisma.tax.findUnique({
           where: { id: line.taxId },
         });
-        if (!tax) {
-          throw ApiError.notFound(
-            `Tax with id ${line.taxId} not found`,
-            'TAX_NOT_FOUND'
-          );
+        if (!tax || !tax.active) {
+          throw ApiError.badRequest(`Tax with id ${line.taxId} is not available`, 'TAX_NOT_FOUND');
         }
       }
 
       // Catalog base price + variant extra price
       const catalogUnitPrice = product.salesPrice + extraPrice;
-      // Use explicit unitPrice if provided in manual input, otherwise catalog price
-      const unitPrice = line.unitPrice !== undefined ? line.unitPrice : catalogUnitPrice;
+      // Prices always come from the catalog; clients cannot override them.
+      const unitPrice = catalogUnitPrice;
       const amount = line.quantity * unitPrice;
+      assertLineWithinLimit(amount);
 
       resolvedLines.push({
         productId: line.productId,
@@ -211,8 +241,12 @@ export class SubscriptionsService {
       // Copy template lines and compute server prices
       for (const tLine of template.lines) {
         const extraPrice = tLine.variant?.extraPrice ?? 0;
+        if (!tLine.product.active) {
+          throw ApiError.badRequest(`Product ${tLine.product.name} is not active`, 'PRODUCT_INACTIVE');
+        }
         const unitPrice = tLine.product.salesPrice + extraPrice;
         const amount = tLine.quantity * unitPrice;
+        assertLineWithinLimit(amount);
 
         resolvedLines.push({
           productId: tLine.productId,
@@ -235,6 +269,10 @@ export class SubscriptionsService {
     if (!plan) {
       throw ApiError.notFound(`Plan with id ${planId} not found`, 'PLAN_NOT_FOUND');
     }
+    if (resolvedLines.length > LIMITS.MAX_LINES) {
+      throw ApiError.badRequest(`A subscription can have at most ${LIMITS.MAX_LINES} lines`, 'TOO_MANY_LINES');
+    }
+    const discountIds = await validateSubscriptionDiscounts(input.discountIds);
 
     // 3. Atomically create subscription within a transaction with human sequential number
     return prisma.$transaction(async (tx) => {
@@ -265,6 +303,7 @@ export class SubscriptionsService {
               amount: line.amount,
             })),
           },
+          discounts: { create: discountIds.map((discountId) => ({ discountId })) },
         },
         include: defaultSubscriptionInclude,
       });
@@ -329,17 +368,13 @@ export class SubscriptionsService {
    * Get subscription by ID with customer ownership enforcement.
    */
   static async getSubscriptionById(id: string, customerIdScope?: string) {
-    const subscription = await prisma.subscription.findUnique({
-      where: { id },
+    // Ownership is part of the WHERE clause, so another customer's record is simply not found (404).
+    const subscription = await prisma.subscription.findFirst({
+      where: { id, ...(customerIdScope !== undefined ? { customerId: customerIdScope } : {}) },
       include: defaultSubscriptionInclude,
     });
 
     if (!subscription) {
-      throw ApiError.notFound(`Subscription with id ${id} not found`, 'SUBSCRIPTION_NOT_FOUND');
-    }
-
-    // Scoped customer isolation
-    if (customerIdScope && subscription.customerId !== customerIdScope) {
       throw ApiError.notFound(`Subscription with id ${id} not found`, 'SUBSCRIPTION_NOT_FOUND');
     }
 
@@ -374,10 +409,24 @@ export class SubscriptionsService {
       }
     }
 
+    const discountIds = input.discountIds ? await validateSubscriptionDiscounts(input.discountIds) : undefined;
+    const resolvedLines = input.lines && input.lines.length > 0 ? await this.resolveLines(input.lines) : undefined;
+
     return prisma.$transaction(async (tx) => {
-      // If new lines are provided, resolve and replace them
-      if (input.lines && input.lines.length > 0) {
-        const resolvedLines = await this.resolveLines(input.lines);
+      // Re-check DRAFT under a row lock so a concurrent transition cannot slip in between.
+      await tx.$queryRaw`SELECT id FROM "Subscription" WHERE id = ${id} FOR UPDATE`;
+      const locked = await tx.subscription.findUnique({ where: { id }, select: { status: true } });
+      if (locked?.status !== SubscriptionStatus.DRAFT) {
+        throw ApiError.conflict('Subscription can only be edited while in DRAFT status', 'INVALID_STATUS');
+      }
+
+      if (discountIds) {
+        await tx.subscriptionDiscount.deleteMany({ where: { subscriptionId: id } });
+        await tx.subscriptionDiscount.createMany({ data: discountIds.map((discountId) => ({ subscriptionId: id, discountId })) });
+      }
+
+      // If new lines are provided, replace them
+      if (resolvedLines) {
 
         // Delete existing lines
         await tx.subscriptionLine.deleteMany({
@@ -421,9 +470,9 @@ export class SubscriptionsService {
    * State Machine Transitions:
    * DRAFT -> QUOTATION -> CONFIRMED -> ACTIVE -> CLOSED
    */
-  static async transitionSubscription(id: string, targetStatus: SubscriptionStatus, isCustomer = false) {
-    const subscription = await prisma.subscription.findUnique({
-      where: { id },
+  static async transitionSubscription(id: string, targetStatus: SubscriptionStatus, isCustomer = false, customerIdScope?: string) {
+    const subscription = await prisma.subscription.findFirst({
+      where: { id, ...(customerIdScope !== undefined ? { customerId: customerIdScope } : {}) },
       include: {
         plan: true,
         lines: true,
@@ -436,6 +485,11 @@ export class SubscriptionsService {
 
     const currentStatus = subscription.status;
     const allowed = ALLOWED_TRANSITIONS[currentStatus] || [];
+
+    // Customers may only close their own active subscription (when the plan allows it).
+    if (isCustomer && targetStatus !== SubscriptionStatus.CLOSED) {
+      throw ApiError.forbidden('Customers can only close their own subscriptions', 'FORBIDDEN_TRANSITION');
+    }
 
     if (!allowed.includes(targetStatus)) {
       throw ApiError.conflict(
@@ -505,19 +559,20 @@ export class SubscriptionsService {
       nextInvoiceDateUpdate = null;
     }
 
-    // Transactional status update with conditional guard against concurrent state changes
-    const updated = await prisma.subscription.update({
-      where: {
-        id,
-      },
+    // Compare-and-set: the update only applies if the status is still the one we validated.
+    const result = await prisma.subscription.updateMany({
+      where: { id, status: currentStatus },
       data: {
         status: targetStatus,
         nextInvoiceDate: nextInvoiceDateUpdate !== undefined ? nextInvoiceDateUpdate : undefined,
+        ...(targetStatus === SubscriptionStatus.CLOSED ? { pausedAt: null } : {}),
       },
-      include: defaultSubscriptionInclude,
     });
+    if (result.count !== 1) {
+      throw ApiError.conflict('Subscription status changed while you were editing; reload and try again', 'CONCURRENT_UPDATE');
+    }
 
-    return updated;
+    return prisma.subscription.findUniqueOrThrow({ where: { id }, include: defaultSubscriptionInclude });
   }
 
   /**
@@ -541,19 +596,15 @@ export class SubscriptionsService {
       throw ApiError.conflict('Plan does not permit pausing', 'PLAN_NOT_PAUSABLE');
     }
 
-    return prisma.subscription.update({
-      where: { id },
-      data: {
-        pausedAt: new Date(),
-      },
-      include: defaultSubscriptionInclude,
-    });
+    const result = await prisma.subscription.updateMany({ where: { id, status: SubscriptionStatus.ACTIVE, pausedAt: null }, data: { pausedAt: new Date() } });
+    if (result.count !== 1) throw ApiError.conflict('Subscription changed concurrently; reload and try again', 'CONCURRENT_UPDATE');
+    return prisma.subscription.findUniqueOrThrow({ where: { id }, include: defaultSubscriptionInclude });
   }
 
   /**
    * Resume a paused subscription (clears pausedAt = null).
    */
-  static async resumeSubscription(id: string, customerIdScope?: string) {
+  static async resumeSubscription(id: string, customerIdScope?: string, today = new Date()) {
     const subscription = await this.getSubscriptionById(id, customerIdScope);
 
     if (subscription.status !== SubscriptionStatus.ACTIVE) {
@@ -567,13 +618,16 @@ export class SubscriptionsService {
       throw ApiError.conflict('Subscription is not currently paused', 'NOT_PAUSED');
     }
 
-    return prisma.subscription.update({
-      where: { id },
-      data: {
-        pausedAt: null,
-      },
-      include: defaultSubscriptionInclude,
+    // DECISION: no back-billing. Skip every anchor that passed while paused and resume
+    // at the next anchor date on or after today.
+    const from = subscription.nextInvoiceDate ?? subscription.startDate;
+    const nextInvoiceDate = nextAnchorOnOrAfter(from, subscription.plan.billingPeriod, subscription.startDate, today);
+    const result = await prisma.subscription.updateMany({
+      where: { id, status: SubscriptionStatus.ACTIVE, pausedAt: { not: null } },
+      data: { pausedAt: null, nextInvoiceDate },
     });
+    if (result.count !== 1) throw ApiError.conflict('Subscription changed concurrently; reload and try again', 'CONCURRENT_UPDATE');
+    return prisma.subscription.findUniqueOrThrow({ where: { id }, include: defaultSubscriptionInclude });
   }
 
   /**
@@ -585,6 +639,9 @@ export class SubscriptionsService {
 
     if (!subscription.plan.renewable) {
       throw ApiError.conflict('Plan does not permit renewal', 'PLAN_NOT_RENEWABLE');
+    }
+    if (subscription.status !== SubscriptionStatus.ACTIVE && subscription.status !== SubscriptionStatus.CLOSED) {
+      throw ApiError.conflict('Only active or closed subscriptions can be renewed', 'INVALID_STATUS');
     }
 
     return prisma.$transaction(async (tx) => {
@@ -633,11 +690,12 @@ export class SubscriptionsService {
   /**
    * Get subscriptions for customer portal, strictly scoped to customerId.
    */
-  static async getCustomerSubscriptions(customerId: string) {
-    return prisma.subscription.findMany({
-      where: { customerId },
-      orderBy: { createdAt: 'desc' },
-      include: defaultSubscriptionInclude,
-    });
+  static async getCustomerSubscriptions(customerId: string, page = 1, pageSize = 20, status?: SubscriptionStatus) {
+    const where: Prisma.SubscriptionWhereInput = { customerId, ...(status ? { status } : {}) };
+    const [total, data] = await Promise.all([
+      prisma.subscription.count({ where }),
+      prisma.subscription.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize, include: defaultSubscriptionInclude }),
+    ]);
+    return { data, meta: { page, pageSize, total } };
   }
 }

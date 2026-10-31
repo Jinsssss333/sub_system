@@ -12,8 +12,8 @@ export async function createTemplateHandler(req: Request, res: Response, next: N
 
 export async function getTemplatesHandler(req: Request, res: Response, next: NextFunction) {
   try {
-    const templates = await TemplatesService.getTemplates();
-    return res.json({ data: templates });
+    const { page, pageSize, q } = req.query as unknown as { page: number; pageSize: number; q?: string };
+    return res.json(await TemplatesService.getTemplates(page, pageSize, q));
   } catch (error) {
     return next(error);
   }

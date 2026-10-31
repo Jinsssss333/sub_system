@@ -5,16 +5,19 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "billing:run": "tsx src/jobs/billing.job.ts",
-    "test": "vitest run --dir test",
+    "billing:run": "tsx src/jobs/run.ts",
+    "test": "vitest run",
     "test:person1": "tsx tests/verify_person_1.ts",
     "test:person2": "tsx tests/verify_person_2.ts && tsx prisma/seed.ts",
-    "test:all": "vitest run --dir test && tsx tests/verify_person_1.ts && tsx tests/verify_person_2.ts && tsx prisma/seed.ts"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "db:deploy": "prisma migrate deploy",
+    "db:test:prepare": "dotenv -e .env.test -- prisma migrate deploy",
+    "bench": "tsx scripts/benchmark.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
@@ -25,7 +28,8 @@
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.13",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@brightloop/shared": "*"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -38,6 +42,13 @@
     "prisma": "^5.14.0",
     "tsx": "^4.10.5",
     "typescript": "^5.4.5",
-    "vitest": "^4.1.12"
+    "vitest": "^4.1.12",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2",
+    "dotenv-cli": "^8.0.0"
+  },
+  "type": "module",
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

@@ -1,29 +1,13 @@
 import { z } from 'zod';
+import { forgotPasswordBody, loginBody, resetPasswordBody, signupBody } from '@brightloop/shared';
 
-export const loginSchema = z.object({
-  body: z.object({
-    email: z.string().trim().toLowerCase().email('Invalid email address'),
-    password: z.string().min(1, 'Password is required'),
-  }).strict(),
-});
+// Request schemas are the shared contracts the frontend also uses.
+export const loginSchema = z.object({ body: loginBody });
+export const signupSchema = z.object({ body: signupBody });
+export const forgotPasswordSchema = z.object({ body: forgotPasswordBody });
+export const resetPasswordSchema = z.object({ body: resetPasswordBody });
 
-export const signupSchema = z.object({
-  body: z.object({
-    email: z.string().trim().toLowerCase().email('Invalid email address'),
-    password: z
-      .string()
-      .min(9, 'Password must be more than 8 characters')
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{9,}$/,
-        'Password must contain at least one uppercase letter, one lowercase letter, and one special character'
-      ),
-    name: z.string().trim().min(1, 'Name is required'),
-    companyName: z.string().trim().optional(),
-    phone: z.string().trim().optional(),
-    address: z.string().trim().optional(),
-  }).strict(),
-});
-
-export type LoginInput = z.infer<typeof loginSchema>['body'];
-export type SignupInput = z.infer<typeof signupSchema>['body'];
-
+export type LoginInput = z.infer<typeof loginBody>;
+export type SignupInput = z.infer<typeof signupBody>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordBody>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordBody>;

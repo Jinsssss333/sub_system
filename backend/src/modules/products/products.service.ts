@@ -1,8 +1,10 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/db.js';
+import { ApiError } from '../../utils/errors.js';
 import {
   CreateProductInput,
   CreateVariantInput,
+  UpdateProductInput,
   ListProductsQuery,
 } from './products.schema.js';
 
@@ -57,10 +59,7 @@ export async function getProductById(id: string) {
   });
 
   if (!product) {
-    const error: any = new Error('Product not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
+    throw new ApiError(404, 'NOT_FOUND', 'Product not found');
   }
 
   return product;
@@ -90,10 +89,7 @@ export async function createVariant(productId: string, input: CreateVariantInput
   });
 
   if (!product) {
-    const error: any = new Error('Product not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
+    throw new ApiError(404, 'NOT_FOUND', 'Product not found');
   }
 
   try {
@@ -109,14 +105,15 @@ export async function createVariant(productId: string, input: CreateVariantInput
     return variant;
   } catch (error: any) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      const conflictError: any = new Error(
-        `Variant with attribute "${input.attribute}" and value "${input.value}" already exists for this product`
-      );
-      conflictError.statusCode = 409;
-      conflictError.code = 'CONFLICT';
-      throw conflictError;
+      throw new ApiError(409, 'CONFLICT', `Variant with attribute "${input.attribute}" and value "${input.value}" already exists for this product`);
     }
     throw error;
   }
 }
 
+
+export async function updateProduct(id: string, input: UpdateProductInput) {
+  const existing = await prisma.product.findUnique({ where: { id } });
+  if (!existing) throw new ApiError(404, 'NOT_FOUND', 'Product not found');
+  return prisma.product.update({ where: { id }, data: input, include: { variants: true } });
+}

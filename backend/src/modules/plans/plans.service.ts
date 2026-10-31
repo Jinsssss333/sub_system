@@ -1,4 +1,5 @@
 import { prisma } from '../../config/db.js';
+import { ApiError } from '../../utils/errors.js';
 import { CreatePlanInput, ListPlansQuery } from './plans.schema.js';
 
 export async function listPlans(query: ListPlansQuery) {
@@ -40,10 +41,7 @@ export async function getPlanById(id: string) {
   });
 
   if (!plan) {
-    const error: any = new Error('Plan not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
+    throw new ApiError(404, 'NOT_FOUND', 'Plan not found');
   }
 
   return plan;
@@ -56,8 +54,8 @@ export async function createPlan(input: CreatePlanInput) {
       price: input.price,
       billingPeriod: input.billingPeriod,
       minQuantity: input.minQuantity,
-      startDate: input.startDate,
-      endDate: input.endDate,
+      startDate: new Date(input.startDate),
+      endDate: input.endDate ? new Date(input.endDate) : null,
       autoClose: input.autoClose,
       closable: input.closable,
       pausable: input.pausable,

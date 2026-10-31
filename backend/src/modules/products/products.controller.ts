@@ -37,3 +37,12 @@ export async function addVariant(req: Request, res: Response, next: NextFunction
   }
 }
 
+
+export async function update(req: Request, res: Response, next: NextFunction) {
+  try {
+    const product = await productsService.updateProduct(req.params.id, req.body);
+    return res.json({ data: product });
+  } catch (error) {
+    return next(error);
+  }
+}

@@ -1,165 +1,82 @@
-import { useState } from 'react';
-import { 
-  Building2, 
-  Users, 
-  Package, 
-  CreditCard, 
-  FileText, 
-  BarChart3, 
-  ShieldCheck, 
-  CheckCircle2,
-  Receipt
-} from 'lucide-react';
+import { ReactNode } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { homeFor, useAuth } from './lib/auth';
+import type { Role } from './api/types';
+import { AppShell } from './layouts/AppShell';
+import { PageLoader } from './components/ui';
+import { LoginPage, SignupPage, ForgotPasswordPage, ResetPasswordPage } from './pages/auth/AuthPages';
+import { FinanceDashboard } from './pages/finance/FinanceDashboard';
+import { SubscriptionsPage } from './pages/staff/SubscriptionsPage';
+import { NewSubscriptionPage } from './pages/staff/NewSubscriptionPage';
+import { SubscriptionDetailPage } from './pages/staff/SubscriptionDetailPage';
+import { InvoicesPage } from './pages/staff/InvoicesPage';
+import { InvoiceDetailPage } from './pages/staff/InvoiceDetailPage';
+import { PaymentsPage } from './pages/staff/PaymentsPage';
+import { CustomersPage } from './pages/staff/CustomersPage';
+import { ProductsPage } from './pages/admin/ProductsPage';
+import { PlansPage } from './pages/admin/PlansPage';
+import { TaxesPage } from './pages/admin/TaxesPage';
+import { DiscountsPage } from './pages/admin/DiscountsPage';
+import { TemplatesPage } from './pages/admin/TemplatesPage';
+import { UsersPage } from './pages/admin/UsersPage';
+import { CustomerPortal } from './pages/customer/CustomerPortal';
+import { MyInvoicesPage } from './pages/customer/MyInvoicesPage';
+import { ProfilePage } from './pages/customer/ProfilePage';
 
-export function App() {
-  const [currentRole, setCurrentRole] = useState<'ADMIN' | 'STAFF' | 'CUSTOMER'>('ADMIN');
-
-  return (
-    <div className="flex h-screen bg-slate-100 font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-          <div className="bg-primary-600 p-2 rounded-lg">
-            <Building2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-sm tracking-wide">BRIGHTLOOP</h1>
-            <p className="text-xs text-slate-400">Subscription Engine</p>
-          </div>
-        </div>
-
-        <nav className="flex-1 p-4 space-y-1">
-          {currentRole === 'ADMIN' && (
-            <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Admin Panel</div>
-              <a href="#catalog" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <Package className="w-4 h-4" /> Products & Plans
-              </a>
-              <a href="#users" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Users className="w-4 h-4" /> Staff & Users
-              </a>
-              <a href="#finance" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <BarChart3 className="w-4 h-4" /> Finance Dashboard
-              </a>
-            </>
-          )}
-
-          {currentRole === 'STAFF' && (
-            <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Operations</div>
-              <a href="#subscriptions" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <FileText className="w-4 h-4" /> Subscriptions
-              </a>
-              <a href="#invoices" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Receipt className="w-4 h-4" /> Invoices & Billing
-              </a>
-              <a href="#payments" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <CreditCard className="w-4 h-4" /> Payments
-              </a>
-            </>
-          )}
-
-          {currentRole === 'CUSTOMER' && (
-            <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Customer Portal</div>
-              <a href="#my-subs" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <FileText className="w-4 h-4" /> My Subscriptions
-              </a>
-              <a href="#my-invoices" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Receipt className="w-4 h-4" /> My Invoices
-              </a>
-            </>
-          )}
-        </nav>
-
-        <div className="p-4 border-t border-slate-800 text-xs text-slate-400">
-          Odoo Hackathon 2026 Edition
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar with Demo Role Switcher */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span className="text-sm font-medium text-slate-700">Role View:</span>
-            <span className="font-semibold text-sm bg-slate-100 text-slate-800 px-2 py-0.5 rounded border">
-              {currentRole}
-            </span>
-          </div>
-
-          {/* Quick Role Switcher for Hackathon Judges */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 mr-2 font-medium">Switch View:</span>
-            <button
-              onClick={() => setCurrentRole('ADMIN')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'ADMIN' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => setCurrentRole('STAFF')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'STAFF' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Staff
-            </button>
-            <button
-              onClick={() => setCurrentRole('CUSTOMER')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'CUSTOMER' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Customer
-            </button>
-          </div>
-        </header>
-
-        {/* Workspace Placeholder */}
-        <main className="flex-1 p-8 overflow-auto">
-          <div className="max-w-5xl mx-auto">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-              <div className="flex items-center gap-3 text-emerald-600 mb-4">
-                <CheckCircle2 className="w-8 h-8" />
-                <h2 className="text-2xl font-bold text-slate-900">Foundation Ready for 4-Person Sprint</h2>
-              </div>
-              <p className="text-slate-600 mb-6">
-                The core monorepo, Docker PostgreSQL environment, Prisma database schema, and frontend layout are now set up on the <code className="bg-slate-100 px-2 py-1 rounded text-primary-600 font-mono text-sm">dev</code> branch.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 1: Identity & Catalog</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/identity-catalog</code></p>
-                  <p className="text-slate-500 text-xs">Auth, JWT, RBAC, Users, Products (+₹560 Odoo variant), Plans, Taxes, Discounts.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 2: Subscriptions Lifecycle</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/subscriptions</code></p>
-                  <p className="text-slate-500 text-xs">Templates, Quotes, Subscriptions State Machine (Draft → Closed), Pause/Renew, Date math.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 3: Billing & Finance Engine</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/billing-engine</code></p>
-                  <p className="text-slate-500 text-xs">Pricing math, idempotent invoice generator, payment recording, scheduler & SQL aggregates.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🎨 Person 4: Frontend & Integration</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/frontend-integration</code></p>
-                  <p className="text-slate-500 text-xs">Complete UI across Admin, Staff, and Customer Portal, TanStack Query, and Live Pitch Lead.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+function RequireRole({ roles, children }: { roles: Role[]; children: ReactNode }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return <div className="p-8"><PageLoader /></div>;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!roles.includes(user.role)) return <Navigate to={homeFor(user.role)} replace />;
+  return <>{children}</>;
 }
 
-export default App;
+function PublicOnly({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (user) return <Navigate to={homeFor(user.role)} replace />;
+  return <>{children}</>;
+}
 
+const STAFF: Role[] = ['ADMIN', 'STAFF'];
+
+export function App() {
+  const { user } = useAuth();
+  return (
+    <Routes>
+      <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
+      <Route path="/signup" element={<PublicOnly><SignupPage /></PublicOnly>} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      <Route element={<RequireRole roles={STAFF}><AppShell /></RequireRole>}>
+        <Route path="/dashboard" element={<FinanceDashboard />} />
+        <Route path="/subscriptions" element={<SubscriptionsPage />} />
+        <Route path="/subscriptions/new" element={<NewSubscriptionPage />} />
+        <Route path="/subscriptions/:id" element={<SubscriptionDetailPage />} />
+        <Route path="/invoices" element={<InvoicesPage />} />
+        <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+        <Route path="/payments" element={<PaymentsPage />} />
+        <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/catalog/products" element={<ProductsPage />} />
+        <Route path="/catalog/plans" element={<PlansPage />} />
+        <Route path="/catalog/templates" element={<TemplatesPage />} />
+        <Route path="/catalog/discounts" element={<DiscountsPage />} />
+      </Route>
+      <Route element={<RequireRole roles={['ADMIN']}><AppShell /></RequireRole>}>
+        <Route path="/catalog/taxes" element={<TaxesPage />} />
+        <Route path="/users" element={<UsersPage />} />
+      </Route>
+      <Route element={<RequireRole roles={['CUSTOMER']}><AppShell /></RequireRole>}>
+        <Route path="/portal" element={<CustomerPortal />} />
+        <Route path="/portal/subscriptions/:id" element={<SubscriptionDetailPage />} />
+        <Route path="/portal/invoices" element={<MyInvoicesPage />} />
+        <Route path="/portal/invoices/:id" element={<InvoiceDetailPage />} />
+        <Route path="/portal/profile" element={<ProfilePage />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to={user ? homeFor(user.role) : '/login'} replace />} />
+    </Routes>
+  );
+}

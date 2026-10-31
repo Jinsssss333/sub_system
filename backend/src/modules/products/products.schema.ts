@@ -1,25 +1,16 @@
 import { z } from 'zod';
+import { productBody, variantBody } from '@brightloop/shared';
 
-export const createProductSchema = z.object({
-  body: z.object({
-    name: z.string().trim().min(1, 'Name is required'),
-    type: z.string().trim().min(1, 'Type is required'),
-    salesPrice: z.number().int().min(0, 'Sales price must be a non-negative integer in paise'),
-    costPrice: z.number().int().min(0, 'Cost price must be a non-negative integer in paise'),
-    notes: z.string().trim().optional(),
-    active: z.boolean().optional().default(true),
-  }).strict(),
+export const createProductSchema = z.object({ body: productBody });
+
+export const updateProductSchema = z.object({
+  params: z.object({ id: z.string().uuid('Invalid product ID') }),
+  body: productBody.partial().strict(),
 });
 
 export const createVariantSchema = z.object({
-  params: z.object({
-    id: z.string().uuid('Invalid product ID'),
-  }),
-  body: z.object({
-    attribute: z.string().trim().min(1, 'Attribute is required'),
-    value: z.string().trim().min(1, 'Value is required'),
-    extraPrice: z.number().int().min(0, 'Extra price must be a non-negative integer in paise').default(0),
-  }).strict(),
+  params: z.object({ id: z.string().uuid('Invalid product ID') }),
+  body: variantBody,
 });
 
 export const listProductsQuerySchema = z.object({
@@ -41,6 +32,7 @@ export const getProductParamsSchema = z.object({
 });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>['body'];
+export type UpdateProductInput = z.infer<typeof updateProductSchema>['body'];
 export type CreateVariantInput = z.infer<typeof createVariantSchema>['body'];
 export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>['query'];
 

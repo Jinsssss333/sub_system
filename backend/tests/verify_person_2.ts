@@ -4,7 +4,7 @@ import { BillingPeriod, SubscriptionStatus } from '@prisma/client';
 import { app } from '../src/app.js';
 import { prisma } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
-import { addPeriod, addDays, calculatePeriodEnd } from '../src/utils/dates.js';
+import { addPeriod } from '../src/utils/dates.js';
 
 function assert(condition: boolean, message: string) {
   if (!condition) {
@@ -185,7 +185,7 @@ async function main() {
     { id: userCust1.id, email: userCust1.email, role: 'CUSTOMER', customerId: customer1.id },
     env.JWT_SECRET
   );
-  const cust2Token = jwt.sign(
+  const _cust2Token = jwt.sign(
     { id: userCust2.id, email: userCust2.email, role: 'CUSTOMER', customerId: customer2.id },
     env.JWT_SECRET
   );

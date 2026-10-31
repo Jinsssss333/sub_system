@@ -1,5 +1,7 @@
+import { Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/db.js';
+import { ApiError } from '../../utils/errors.js';
 import { CreateStaffInput, ListUsersQuery } from './users.schema.js';
 
 export async function listUsers(query: ListUsersQuery) {
@@ -7,7 +9,7 @@ export async function listUsers(query: ListUsersQuery) {
   const skip = (page - 1) * pageSize;
   const take = Math.min(pageSize, 100);
 
-  const where: any = {};
+  const where: Prisma.UserWhereInput = {};
   if (q && q.trim().length > 0) {
     const search = q.trim();
     where.OR = [
@@ -60,10 +62,7 @@ export async function createStaff(input: CreateStaffInput) {
   });
 
   if (existing) {
-    const error: any = new Error('A user with this email already exists');
-    error.statusCode = 409;
-    error.code = 'CONFLICT';
-    throw error;
+    throw ApiError.conflict('A user with this email already exists', 'DUPLICATE_EMAIL');
   }
 
   const passwordHash = await bcrypt.hash(input.password, 10);

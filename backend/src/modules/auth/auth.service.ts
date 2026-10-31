@@ -1,10 +1,26 @@
+import { createHash, randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { env } from '../../config/env.js';
 import { ApiError } from '../../utils/errors.js';
-import { LoginInput, SignupInput } from './auth.schema.js';
+import { sendEmail } from '../../config/mailer.js';
+import { escapeHtml } from '../../utils/html.js';
+import { ForgotPasswordInput, LoginInput, ResetPasswordInput, SignupInput } from './auth.schema.js';
+
+const RESET_TTL_MS = 30 * 60 * 1000;
+// Fixed hash so unknown-email logins spend the same bcrypt time as real ones.
+const DUMMY_HASH = '$2a$10$CwTycUXWue0Thq9StjUM0uJ8.ob/ZDZVv2Mf1WuYEXb3NLQbwF6eG';
+
+function issueToken(user: { id: string; email: string; role: Role }, customerId?: string) {
+  return jwt.sign({ id: user.id, email: user.email, role: user.role, customerId }, env.JWT_SECRET, {
+    algorithm: 'HS256',
+    expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
+  });
+}
+
+const hashResetToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 export async function loginUser(input: LoginInput) {
   const normalizedEmail = input.email.trim().toLowerCase();
@@ -14,27 +30,18 @@ export async function loginUser(input: LoginInput) {
     include: { customer: true },
   });
 
+  const isPasswordValid = await bcrypt.compare(input.password, user?.passwordHash ?? DUMMY_HASH);
   if (!user) {
     throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
   }
 
-  const isPasswordValid = await bcrypt.compare(input.password, user.passwordHash);
   if (!isPasswordValid) {
     throw ApiError.unauthorized('Invalid email or password', 'INVALID_CREDENTIALS');
   }
 
   const customerId = user.customer?.id;
 
-  const token = jwt.sign(
-    {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      customerId,
-    },
-    env.JWT_SECRET,
-    { expiresIn: '1d' }
-  );
+  const token = issueToken(user, customerId);
 
   return {
     token,
@@ -80,16 +87,7 @@ export async function signupUser(input: SignupInput) {
 
   const customerId = user.customer?.id;
 
-  const token = jwt.sign(
-    {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      customerId,
-    },
-    env.JWT_SECRET,
-    { expiresIn: '1d' }
-  );
+  const token = issueToken(user, customerId);
 
   return {
     token,
@@ -128,4 +126,43 @@ export async function getCurrentUser(userId: string) {
         }
       : null,
   };
+}
+
+/**
+ * Always resolves the same way whether or not the email exists (no account enumeration).
+ * The raw token exists only in the emailed link; the database stores its SHA-256 hash.
+ */
+export async function requestPasswordReset(input: ForgotPasswordInput) {
+  const user = await prisma.user.findUnique({ where: { email: input.email.trim().toLowerCase() } });
+  if (!user) return;
+
+  const token = randomBytes(32).toString('hex');
+  await prisma.$transaction([
+    prisma.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: new Date() } }),
+    prisma.passwordResetToken.create({ data: { userId: user.id, tokenHash: hashResetToken(token), expiresAt: new Date(Date.now() + RESET_TTL_MS) } }),
+  ]);
+
+  const link = `${env.APP_URL}/reset-password?token=${token}`;
+  await sendEmail({
+    to: user.email,
+    subject: 'Reset your Brightloop password',
+    text: `Hi ${user.name},\n\nReset your password within 30 minutes: ${link}\n\nIf you did not ask for this, ignore this email.`,
+    html: `<p>Hi ${escapeHtml(user.name)},</p><p><a href="${escapeHtml(link)}">Reset your password</a>. The link expires in 30 minutes and works once.</p><p>If you did not ask for this, ignore this email.</p>`,
+  });
+}
+
+export async function resetPassword(input: ResetPasswordInput) {
+  const tokenHash = hashResetToken(input.token);
+  const passwordHash = await bcrypt.hash(input.password, 10);
+
+  await prisma.$transaction(async (tx) => {
+    const record = await tx.passwordResetToken.findUnique({ where: { tokenHash } });
+    if (!record || record.usedAt || record.expiresAt < new Date()) {
+      throw ApiError.badRequest('This reset link is invalid or has expired', 'INVALID_RESET_TOKEN');
+    }
+    // Atomic single-use claim: only one concurrent request can flip usedAt.
+    const claimed = await tx.passwordResetToken.updateMany({ where: { id: record.id, usedAt: null }, data: { usedAt: new Date() } });
+    if (claimed.count !== 1) throw ApiError.badRequest('This reset link is invalid or has expired', 'INVALID_RESET_TOKEN');
+    await tx.user.update({ where: { id: record.userId }, data: { passwordHash } });
+  });
 }

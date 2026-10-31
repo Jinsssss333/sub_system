@@ -71,6 +71,8 @@ model PasswordResetToken {
   expiresAt DateTime
   usedAt    DateTime?
   user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }
 
 model Customer {
@@ -204,6 +206,7 @@ model Subscription {
 
   @@index([status, nextInvoiceDate])
   @@index([customerId])
+  @@index([createdAt])
 }
 
 model SubscriptionLine {
@@ -255,6 +258,7 @@ model Invoice {
   @@unique([subscriptionId, periodStart])
   @@index([status, dueDate])
   @@index([customerId])
+  @@index([issueDate])
 }
 
 model InvoiceLine {
@@ -282,6 +286,7 @@ model Payment {
   invoice   Invoice       @relation(fields: [invoiceId], references: [id])
 
   @@index([paidOn])
+  @@index([invoiceId])
 }
 
 model Counter {

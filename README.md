@@ -318,24 +318,21 @@ Adopted directly from the **Handoff Specification (Section 13)**:
 
 ### Prerequisites
 * **Node.js** 20+
-* **Docker Desktop**
+* **PostgreSQL 16** (Native Windows service or Docker)
 * **Git**
 
-### 1. Clone & Start Local Services (PostgreSQL 16 & Mailpit)
-```bash
-git clone https://github.com/Jinsssss333/sub_system.git
-cd sub_system
-git checkout dev
-
-# Start PostgreSQL (5432) and Mailpit (1025 SMTP, 8025 Web)
-docker compose up -d
+### 1. Database Configuration
+Ensure PostgreSQL is running locally on port 5432 with database `billing`:
+```env
+# backend/.env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/billing"
 ```
 
 ### 2. Backend Setup
 ```bash
 cd backend
 npm install
-npx prisma migrate dev --name init
+npx prisma db push
 npm run db:seed
 npm run dev
 # Backend API runs on: http://localhost:4000
@@ -348,9 +345,6 @@ npm install
 npm run dev
 # Frontend application runs on: http://localhost:5173
 ```
-
-### 4. Local Mailbox
-Open **`http://localhost:8025`** in your browser to view all intercepted password reset and notification emails in real time without internet connectivity.
 
 ---
 

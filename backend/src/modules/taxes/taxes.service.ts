@@ -1,4 +1,5 @@
 import { prisma } from '../../config/db.js';
+import { ApiError } from '../../utils/errors.js';
 import { CreateTaxInput, ListTaxesQuery } from './taxes.schema.js';
 
 export async function listTaxes(query: ListTaxesQuery) {
@@ -40,10 +41,7 @@ export async function getTaxById(id: string) {
   });
 
   if (!tax) {
-    const error: any = new Error('Tax not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
+    throw new ApiError(404, 'NOT_FOUND', 'Tax not found');
   }
 
   return tax;

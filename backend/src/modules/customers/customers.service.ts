@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../config/db.js';
+import { ApiError } from '../../utils/errors.js';
 import { AuthUser } from '../../middleware/auth.js';
 import { CreateCustomerInput, ListCustomersQuery } from './customers.schema.js';
 
@@ -72,10 +73,7 @@ export async function createCustomer(input: CreateCustomerInput) {
   });
 
   if (existing) {
-    const error: any = new Error('A user with this email already exists');
-    error.statusCode = 409;
-    error.code = 'CONFLICT';
-    throw error;
+    throw new ApiError(409, 'CONFLICT', 'A user with this email already exists');
   }
 
   const passwordHash = await bcrypt.hash(input.password, 10);
@@ -118,10 +116,7 @@ export async function createCustomer(input: CreateCustomerInput) {
 
 export async function getCustomerById(id: string, requestingUser: AuthUser) {
   if (requestingUser.role === 'CUSTOMER' && requestingUser.customerId !== id) {
-    const error: any = new Error('Customer not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
+    throw new ApiError(404, 'NOT_FOUND', 'Customer not found');
   }
 
   const customer = await prisma.customer.findUnique({
@@ -140,10 +135,7 @@ export async function getCustomerById(id: string, requestingUser: AuthUser) {
   });
 
   if (!customer) {
-    const error: any = new Error('Customer not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
+    throw new ApiError(404, 'NOT_FOUND', 'Customer not found');
   }
 
   return {

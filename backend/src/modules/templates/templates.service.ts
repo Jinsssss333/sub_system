@@ -76,19 +76,19 @@ export class TemplatesService {
     });
   }
 
-  static async getTemplates() {
-    return prisma.quotationTemplate.findMany({
-      orderBy: { name: 'asc' },
-      include: {
-        plan: true,
-        lines: {
-          include: {
-            product: true,
-            variant: true,
-          },
-        },
-      },
-    });
+  static async getTemplates(page = 1, pageSize = 20, q?: string) {
+    const where = q ? { name: { contains: q, mode: 'insensitive' as const } } : {};
+    const [total, data] = await Promise.all([
+      prisma.quotationTemplate.count({ where }),
+      prisma.quotationTemplate.findMany({
+        where,
+        orderBy: { name: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { plan: true, lines: { include: { product: true, variant: true } } },
+      }),
+    ]);
+    return { data, meta: { page, pageSize, total } };
   }
 
   static async getTemplateById(id: string) {

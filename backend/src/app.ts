@@ -10,6 +10,7 @@ import { customersRouter } from './modules/customers/customers.routes.js';
 import { productsRouter } from './modules/products/products.routes.js';
 import { plansRouter } from './modules/plans/plans.routes.js';
 import { taxesRouter } from './modules/taxes/taxes.routes.js';
+import { discountsRouter } from './modules/discounts/discounts.routes.js';
 
 // Person 2 routers (Subscriptions & Templates)
 import { templatesRouter } from './modules/templates/templates.routes.js';
@@ -53,6 +54,7 @@ app.use('/api/customers', customersRouter);
 app.use('/api/products', productsRouter);
 app.use('/api/plans', plansRouter);
 app.use('/api/taxes', taxesRouter);
+app.use('/api/discounts', discountsRouter);
 
 // Person 2: Subscriptions & Templates routes
 app.use('/api/templates', templatesRouter);

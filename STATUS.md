@@ -151,7 +151,8 @@ frontend/vite.config.ts
 | Gate | Status | Commit |
 | --- | --- | --- |
 | 0 Foundation | existing, fixed | e24ec18 |
-| 1 Identity | existing, fixed | see below |
+| 1 Identity | existing, fixed | dc31025 |
+| 2 Catalog | existing, fixed + built (discounts) | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -189,4 +190,18 @@ $ npm run typecheck      -> exit 0
 $ npx eslint .           -> exit 0, ✖ 38 problems (0 errors, 38 warnings)
 $ npm run build          -> exit 0
 $ npm test -w backend    -> Test Files 5 passed (5) | Tests 26 passed (26)
+```
+
+### Gate 2 — Catalog: existing, fixed; discounts built
+
+Existing and kept: products, variants (unique attribute/value per product), plans with policy flags, taxes in basis points, quotation templates.
+Fixed: every catalog schema now uses the shared contracts (integer paise, max ₹10,00,000, rates ≤ 10000 bps, date-order checks); ad-hoc error objects replaced by `ApiError`; templates list paginated. Built: `PATCH /api/products/:id` (admin; e.g. deactivate) and the discounts API (`GET /api/discounts` paginated, `GET /:id`, `POST` admin-only; FIXED in paise or PERCENT in bps, PRODUCT scope requires existing products, usage limit, date window).
+
+Tests (`test/catalog.test.ts`, 7): product + Odoo variant (+₹560) + duplicate-variant 409 + paginated list; fractional/negative/oversized money rejected; admin deactivation and staff/customer 403s; plan policy defaults and date-order validation; tax bps bounds; discount creation and 5 validation failures + pagination; template creation, empty-template rejection, pagination.
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 30 problems (0 errors, 30 warnings)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 6 passed (6) | Tests 33 passed (33)
 ```

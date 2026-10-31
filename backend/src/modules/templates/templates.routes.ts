@@ -5,6 +5,7 @@ import { validate } from '../../middleware/validate.js';
 import {
   createTemplateSchema,
   getTemplateParamsSchema,
+  listTemplatesQuerySchema,
 } from './templates.schema.js';
 import {
   createTemplateHandler,
@@ -28,6 +29,7 @@ templatesRouter.get(
   '/',
   authMiddleware,
   requireRole('ADMIN', 'STAFF'),
+  validate(listTemplatesQuerySchema),
   getTemplatesHandler
 );
 

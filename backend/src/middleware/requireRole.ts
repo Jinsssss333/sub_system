@@ -18,3 +18,4 @@ export function requireRole(...allowedRoles: Role[]) {
     return next();
   };
 }
+

@@ -26,3 +26,4 @@ export async function sendEmail({
   console.log(`✉️ Email dispatched to ${to} (MessageId: ${info.messageId})`);
   return info;
 }
+

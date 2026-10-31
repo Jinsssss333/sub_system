@@ -31,3 +31,4 @@ export function addPeriod(date: Date, period: BillingPeriod): Date {
 
   return result;
 }
+

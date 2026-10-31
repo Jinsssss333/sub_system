@@ -10,3 +10,4 @@ export async function getNextSequenceNumber(prefix: string, key: string): Promis
   const padded = counter.value.toString().padStart(6, '0');
   return `${prefix}-${padded}`;
 }
+

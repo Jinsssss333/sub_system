@@ -6,3 +6,4 @@ export const authRouter = Router();
 authRouter.get('/me', (req, res) => {
   res.json({ message: 'Auth module ready for Person 1' });
 });
+

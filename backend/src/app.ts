@@ -30,3 +30,4 @@ app.use('/api/reports', reportsRouter);
 
 // Centralized error handling
 app.use(errorHandler);
+

@@ -15,3 +15,4 @@ export function calculateTaxAmount(discountedAmount: number, rateBps: number): n
   // Rounded half-up
   return Math.round((discountedAmount * rateBps) / 10000);
 }
+

@@ -113,6 +113,3 @@ export function nextPeriod(
 ): Date {
   return addPeriod(periodStart, billingPeriod as BillingPeriod, anchor);
 }
-
-
-

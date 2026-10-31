@@ -374,3 +374,4 @@ Use a separate test database. Refuse destructive cleanup unless the database nam
 > Do not start coding, installing, migrating, committing, pushing or deploying yet. First summarize the architecture and identify only the business decisions that materially affect billing. Treat existing local files and DECISIONS.md as unreviewed drafts, not user-approved choices.
 >
 > Once the user approves building, inspect the actual workspace and Git status before editing. Keep the fixed Express/Prisma/PostgreSQL 16 and React stack. Implement one quality gate at a time with tests. Do not substitute a static UI, cloud service or different persistence stack. Keep business rules in service modules, enforce role/ownership rules server-side, use transactional billing and payments, and validate the full three-role flow before calling the repo ready.
+do

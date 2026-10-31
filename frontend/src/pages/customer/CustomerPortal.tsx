@@ -1,276 +1,78 @@
-import { useState, useEffect } from 'react';
-import { FileText, Receipt, Printer, ShieldCheck } from 'lucide-react';
-import { initialSubscriptions, initialInvoices, Invoice, Subscription } from '../../api/mockData';
-import { apiRequest } from '../../api/client';
-import { SubscriptionStatusBadge, InvoiceStatusBadge } from '../../components/Badge';
-import { formatINR, formatDate, isOverdue } from '../../utils/formatters';
-import { PrintInvoiceModal } from '../../layouts/PrintInvoiceModal';
+import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowRight, CalendarClock, Receipt, Wallet } from 'lucide-react';
+import { api, Page } from '../../api/client';
+import type { Invoice, Subscription } from '../../api/types';
+import { EmptyState, ErrorState, PageHeader, PageLoader, StatCard, StatusBadge, Table, TableMessage, TableSkeleton } from '../../components/ui';
+import { useAuth } from '../../lib/auth';
+import { formatDate, formatINR, isOverdue, periodLabel } from '../../lib/format';
 
 export function CustomerPortal() {
-  const [activeTab, setActiveTab] = useState<'SUBSCRIPTIONS' | 'INVOICES'>('SUBSCRIPTIONS');
-  const [activePrintInvoice, setActivePrintInvoice] = useState<Invoice | null>(null);
+  const { user } = useAuth();
+  const subs = useQuery({ queryKey: ['/me/subscriptions'], queryFn: () => api.get<Page<Subscription>>('/me/subscriptions', { pageSize: 50 }) });
+  const open = useQuery({ queryKey: ['/me/invoices', 'open'], queryFn: () => api.get<Page<Invoice>>('/me/invoices', { status: 'CONFIRMED', pageSize: 50 }) });
 
-  // STRICT CUSTOMER DATA ISOLATION: customer@brightloop.test (customerId: 'cust-1')
-  const customerEmail = 'customer@brightloop.test';
-  const customerId = 'cust-1';
-
-  const [mySubscriptions, setMySubscriptions] = useState<Subscription[]>(
-    initialSubscriptions.filter((s) => s.customerId === customerId || s.customerEmail === customerEmail)
-  );
-  const [myInvoices, setMyInvoices] = useState<Invoice[]>(
-    initialInvoices.filter((i) => i.customerId === customerId || i.customerEmail === customerEmail)
-  );
-
-  useEffect(() => {
-    apiRequest('/me/subscriptions').then((res) => {
-      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        setMySubscriptions(res.data.map((s: any) => ({
-          id: s.id,
-          number: s.number,
-          customerId: s.customerId,
-          customerName: s.customer?.companyName || 'Acme Retail Pvt Ltd',
-          customerEmail: 'customer@brightloop.test',
-          planId: s.planId,
-          planName: s.plan?.name || 'Standard Monthly Plan',
-          status: s.status,
-          startDate: s.startDate,
-          expiryDate: s.expiryDate,
-          paymentTermDays: s.paymentTermDays || 15,
-          nextInvoiceDate: s.nextInvoiceDate,
-          pausedAt: s.pausedAt,
-          lines: (s.lines || []).map((l: any) => ({
-            id: l.id,
-            productId: l.productId,
-            productName: l.product?.name || 'Product',
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            taxRateBps: 1800,
-            amount: l.amount,
-          })),
-        })));
-      }
-    }).catch(() => {});
-
-    apiRequest('/me/invoices').then((res) => {
-      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
-        setMyInvoices(res.data.map((inv: any) => ({
-          id: inv.id,
-          number: inv.number,
-          subscriptionId: inv.subscriptionId,
-          subscriptionNumber: inv.subscription?.number || '',
-          customerId: inv.customerId,
-          customerName: 'Acme Retail Pvt Ltd',
-          customerEmail: 'customer@brightloop.test',
-          periodStart: inv.periodStart,
-          periodEnd: inv.periodEnd,
-          status: inv.status,
-          subtotal: inv.subtotal,
-          discountTotal: inv.discountTotal || 0,
-          taxTotal: inv.taxTotal,
-          total: inv.total,
-          amountPaid: inv.amountPaid || 0,
-          issueDate: inv.issueDate,
-          dueDate: inv.dueDate,
-          lines: inv.lines || [],
-          payments: inv.payments || [],
-        })));
-      }
-    }).catch(() => {});
-  }, []);
+  if (subs.isLoading) return <PageLoader />;
+  if (subs.isError) return <ErrorState error={subs.error} onRetry={() => subs.refetch()} />;
+  const list = subs.data!.data;
+  const active = list.filter((s) => s.status === 'ACTIVE');
+  const due = (open.data?.data ?? []).reduce((sum, inv) => sum + inv.total - inv.amountPaid, 0);
+  const nextDates = active.filter((s) => !s.pausedAt && s.nextInvoiceDate).map((s) => s.nextInvoiceDate!).sort();
 
   return (
-    <div className="space-y-6">
-      {/* Customer Header */}
-      <div className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-6 sm:p-8 rounded-2xl shadow-md border border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-              AR
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold">Acme Retail Pvt Ltd</h1>
-                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                  Verified Client
-                </span>
-              </div>
-              <p className="text-xs text-slate-300 mt-1 flex items-center gap-2">
-                <span className="font-mono">customer@brightloop.test</span>
-                <span>•</span>
-                <span>42 MG Road, Bengaluru, Karnataka</span>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl text-xs border border-white/10">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span className="text-slate-200">Customer Data Isolation Enforced</span>
-          </div>
-        </div>
-
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-2 mt-6 pt-6 border-t border-white/10">
-          <button
-            onClick={() => setActiveTab('SUBSCRIPTIONS')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
-              activeTab === 'SUBSCRIPTIONS'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-300 hover:bg-white/10'
-            }`}
-          >
-            <FileText className="w-4 h-4" /> My Subscriptions ({mySubscriptions.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('INVOICES')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
-              activeTab === 'INVOICES'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-300 hover:bg-white/10'
-            }`}
-          >
-            <Receipt className="w-4 h-4" /> My Invoices & Receipts ({myInvoices.length})
-          </button>
-        </div>
+    <>
+      <PageHeader title={`Hello, ${user?.name.split(' ')[0]}`} description={`${user?.customer?.companyName ?? ''} — your subscriptions and billing at a glance.`} />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <StatCard label="Active subscriptions" value={active.length} icon={<Receipt className="h-5 w-5" />} />
+        <StatCard label="Balance due" value={formatINR(due)} hint={`${open.data?.meta.total ?? 0} open invoices`} icon={<Wallet className="h-5 w-5" />} tone={due > 0 ? 'amber' : 'emerald'} />
+        <StatCard label="Next invoice" value={nextDates[0] ? formatDate(nextDates[0]) : '—'} icon={<CalendarClock className="h-5 w-5" />} />
       </div>
 
-      {/* Content Section: Subscriptions Tab */}
-      {activeTab === 'SUBSCRIPTIONS' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {mySubscriptions.map((sub) => {
-              const totalAmount = sub.lines.reduce((acc, l) => acc + l.amount, 0);
-
-              return (
-                <div
-                  key={sub.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="font-mono text-xs font-bold text-slate-500 block">
-                          {sub.number}
-                        </span>
-                        <h3 className="text-lg font-bold text-slate-900 mt-1">{sub.planName}</h3>
-                      </div>
-                      <SubscriptionStatusBadge status={sub.status} />
-                    </div>
-
-                    {/* Subscription Lines */}
-                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block">
-                        Included Services & Add-ons
-                      </span>
-                      {sub.lines.map((line) => (
-                        <div
-                          key={line.id}
-                          className="flex items-center justify-between text-xs p-2.5 bg-slate-50 rounded-xl border border-slate-100"
-                        >
-                          <div>
-                            <span className="font-medium text-slate-800">{line.productName}</span>
-                            {line.variantName && (
-                              <span className="ml-2 inline-block bg-amber-100 text-amber-900 text-[10px] font-bold px-1.5 py-0.2 rounded">
-                                {line.variantName}
-                              </span>
-                            )}
-                            <span className="block text-[11px] text-slate-400">Qty: {line.quantity}</span>
-                          </div>
-                          <span className="font-mono font-bold text-slate-900">{formatINR(line.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-slate-400 block text-[11px]">Next Renewal Date</span>
-                      <span className="font-semibold text-slate-700">
-                        {formatDate(sub.nextInvoiceDate || sub.startDate)}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-slate-400 block text-[11px]">Total Commitment</span>
-                      <span className="font-mono font-bold text-indigo-600 text-sm">
-                        {formatINR(totalAmount)}
-                      </span>
-                    </div>
-                  </div>
+      <h2 className="mb-3 mt-8 text-sm font-semibold text-slate-900">Your subscriptions</h2>
+      {list.length === 0 ? (
+        <div className="card p-10"><EmptyState title="No subscriptions yet" description="When our team sends you a quotation it will appear here." /></div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {list.map((s) => (
+            <Link key={s.id} to={`/portal/subscriptions/${s.id}`} className="card group p-5 transition hover:border-primary-300 hover:shadow-pop">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-slate-500">{s.number}</p>
+                  <p className="mt-1 truncate text-base font-semibold text-slate-900">{s.plan.name}</p>
+                  <p className="text-sm text-slate-500">{periodLabel[s.plan.billingPeriod]} billing</p>
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex shrink-0 gap-1.5"><StatusBadge status={s.status} />{s.pausedAt && <StatusBadge status="PAUSED" />}</div>
+              </div>
+              <ul className="mt-4 space-y-1 text-sm text-slate-600">
+                {s.lines.slice(0, 3).map((l) => <li key={l.id} className="truncate">{l.product.name}{l.variant ? ` · ${l.variant.value}` : ''} × {l.quantity}</li>)}
+              </ul>
+              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-sm">
+                <span className="text-slate-500">{s.status === 'ACTIVE' && !s.pausedAt ? `Next invoice ${formatDate(s.nextInvoiceDate)}` : s.status === 'ACTIVE' ? 'Billing paused' : `Started ${formatDate(s.startDate)}`}</span>
+                <span className="inline-flex items-center gap-1 font-medium text-primary-700">Manage <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /></span>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
 
-      {/* Content Section: Invoices Tab */}
-      {activeTab === 'INVOICES' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-            <h3 className="font-bold text-sm text-slate-900">Your Billing History</h3>
-            <span className="text-xs text-slate-400">Click Print to generate clean PDF tax receipts</span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
-                  <th className="py-3.5 px-6">Invoice #</th>
-                  <th className="py-3.5 px-4">Billing Period</th>
-                  <th className="py-3.5 px-4">Due Date</th>
-                  <th className="py-3.5 px-4 text-right">Total (INR)</th>
-                  <th className="py-3.5 px-4 text-right">Amount Paid</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-6 text-right">Receipt</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {myInvoices.map((inv) => {
-                  const overdue = isOverdue(inv.dueDate, inv.status);
-
-                  return (
-                    <tr key={inv.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-4 px-6 font-mono font-bold text-slate-900">
-                        {inv.number}
-                      </td>
-                      <td className="py-4 px-4 text-slate-600">
-                        {formatDate(inv.periodStart)} – {formatDate(inv.periodEnd)}
-                      </td>
-                      <td className="py-4 px-4 font-medium text-slate-700">
-                        {formatDate(inv.dueDate)}
-                      </td>
-                      <td className="py-4 px-4 text-right font-mono font-bold text-slate-900">
-                        {formatINR(inv.total)}
-                      </td>
-                      <td className="py-4 px-4 text-right font-mono text-emerald-600 font-semibold">
-                        {formatINR(inv.amountPaid)}
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <InvoiceStatusBadge status={inv.status} isOverdue={overdue} />
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <button
-                          onClick={() => setActivePrintInvoice(inv)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition border border-indigo-200"
-                        >
-                          <Printer className="w-3.5 h-3.5" /> Print / PDF
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Printable Invoice Modal */}
-      {activePrintInvoice && (
-        <PrintInvoiceModal
-          invoice={activePrintInvoice}
-          onClose={() => setActivePrintInvoice(null)}
-        />
-      )}
-    </div>
+      <div className="mb-3 mt-8 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-900">Invoices to pay</h2>
+        <Link to="/portal/invoices" className="text-sm font-medium text-primary-600 hover:text-primary-700">All invoices</Link>
+      </div>
+      <Table head={<tr><th className="th">Invoice</th><th className="th hidden sm:table-cell">Due</th><th className="th">Status</th><th className="th text-right">Balance</th></tr>}>
+        {open.isLoading ? <TableSkeleton columns={4} rows={3} /> : open.isError ? <TableMessage columns={4}><ErrorState error={open.error} /></TableMessage> : open.data!.data.length === 0 ? (
+          <TableMessage columns={4}><EmptyState title="You're all paid up" description="No open invoices right now." /></TableMessage>
+        ) : (
+          open.data!.data.map((inv) => (
+            <tr key={inv.id} className="hover:bg-slate-50">
+              <td className="td"><Link to={`/portal/invoices/${inv.id}`} className="font-medium text-primary-700 hover:underline">{inv.number}</Link></td>
+              <td className="td hidden sm:table-cell">{formatDate(inv.dueDate)}</td>
+              <td className="td"><StatusBadge status={isOverdue(inv) ? 'OVERDUE' : inv.status} /></td>
+              <td className="td tabular text-right font-medium">{formatINR(inv.total - inv.amountPaid)}</td>
+            </tr>
+          ))
+        )}
+      </Table>
+    </>
   );
 }

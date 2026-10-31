@@ -1,204 +1,139 @@
-import { useState, useEffect } from 'react';
-import { apiRequest, getInvoices } from '../../api/client';
-import { 
-  TrendingUp, 
-  AlertTriangle, 
-  DollarSign, 
-  Users, 
-  CreditCard 
-} from 'lucide-react';
-import { StatCard } from '../../components/StatCard';
-import { initialInvoices, Invoice } from '../../api/mockData';
-import { formatINR, formatDate, isOverdue } from '../../utils/formatters';
-import { InvoiceStatusBadge } from '../../components/Badge';
-import { PrintInvoiceModal } from '../../layouts/PrintInvoiceModal';
+import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, CircleDollarSign, Clock, PlayCircle, Repeat } from 'lucide-react';
+import { api, One, Page } from '../../api/client';
+import type { BillingRun, Invoice, Summary } from '../../api/types';
+import { Button, Card, EmptyState, ErrorState, PageHeader, PageLoader, StatCard, StatusBadge, Table, TableMessage, TableSkeleton } from '../../components/ui';
+import { useToast } from '../../components/toast';
+import { useAuth } from '../../lib/auth';
+import { compactINR, formatDate, formatINR } from '../../lib/format';
+
+const monthLabel = (month: string) => new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' });
+
+function RevenueChart({ data }: { data: Summary['monthlyRevenue'] }) {
+  const max = Math.max(1, ...data.map((d) => d.collected));
+  if (data.length === 0) return <EmptyState title="No payments yet" description="Collected revenue appears here once payments are recorded." />;
+  return (
+    <div className="flex h-48 items-end gap-2 sm:gap-3" role="img" aria-label="Collected revenue by month">
+      {data.map((d) => (
+        <div key={d.month} className="flex min-w-0 flex-1 flex-col items-center gap-2">
+          <span className="tabular text-[11px] font-medium text-slate-500">{compactINR(d.collected)}</span>
+          <div className="w-full rounded-t-md bg-primary-500/90 transition-all hover:bg-primary-600" style={{ height: `${Math.max(4, (d.collected / max) * 140)}px` }} title={`${d.month}: ${formatINR(d.collected)}`} />
+          <span className="text-xs text-slate-500">{monthLabel(d.month)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const STATUS_ORDER = ['DRAFT', 'QUOTATION', 'CONFIRMED', 'ACTIVE', 'CLOSED'] as const;
 
 export function FinanceDashboard() {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
-  const [activePrintInvoice, setActivePrintInvoice] = useState<Invoice | null>(null);
-  const [metrics, setMetrics] = useState({ activeSubscriptions: 12, revenueCollected: 45000000, outstanding: 12000000, overdueCount: 2 });
+  const { user } = useAuth();
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const summary = useQuery({ queryKey: ['/reports/summary'], queryFn: () => api.get<One<Summary>>('/reports/summary'), refetchInterval: 30_000 });
+  const overdue = useQuery({ queryKey: ['/reports/overdue', 1], queryFn: () => api.get<Page<Invoice>>('/reports/overdue', { page: 1, pageSize: 8 }) });
 
-  useEffect(() => {
-    apiRequest('/reports/summary').then((res) => {
-      if (res?.data) setMetrics(res.data);
-    }).catch(() => {});
-    getInvoices().then((data) => {
-      if (data && data.length > 0) setInvoices(data);
-    });
-  }, []);
+  const runBilling = useMutation({
+    mutationFn: () => api.post<One<BillingRun>>('/admin/run-billing'),
+    onSuccess: ({ data }) => {
+      toast.success(
+        data.alreadyRunning
+          ? 'A billing run was already in progress; showing its result.'
+          : `Billing run finished: ${data.generated} invoice${data.generated === 1 ? '' : 's'} generated${data.failures.length ? `, ${data.failures.length} failed` : ''} in ${data.durationMs} ms.`,
+      );
+      void queryClient.invalidateQueries();
+    },
+    onError: toast.error,
+  });
 
-  const activeSubscribersCount = metrics.activeSubscriptions;
-  const revenueCollectedPaise = metrics.revenueCollected;
-  const totalOutstandingPaise = metrics.outstanding;
-  
-  // Overdue Invoices
-  const overdueInvoices = invoices.filter((inv) => isOverdue(inv.dueDate, inv.status));
+  if (summary.isLoading) return <PageLoader />;
+  if (summary.isError) return <ErrorState error={summary.error} onRetry={() => summary.refetch()} />;
+  const s = summary.data!.data;
+  const totalSubs = STATUS_ORDER.reduce((sum, key) => sum + (s.subscriptionsByStatus[key] ?? 0), 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Finance & Executive Dashboard</h1>
-            <span className="bg-emerald-50 text-emerald-700 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-emerald-200">
-              Executive View
-            </span>
-          </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Real-time receivables aggregate, collected revenue, and immediate overdue exposure tracking.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3.5 py-2 rounded-xl text-xs font-medium">
-          <TrendingUp className="w-4 h-4 text-emerald-600" />
-          <span>Real-time Financial Aggregates Active</span>
-        </div>
+    <>
+      <PageHeader
+        title="Dashboard"
+        description="Live revenue, receivables and subscription health from the billing database."
+        actions={
+          user?.role === 'ADMIN' && (
+            <Button onClick={() => runBilling.mutate()} loading={runBilling.isPending} icon={<PlayCircle className="h-4 w-4" />}>
+              Run billing now
+            </Button>
+          )
+        }
+      />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active subscriptions" value={s.activeSubscriptions.toLocaleString('en-IN')} hint={`${s.pausedSubscriptions} paused`} icon={<Repeat className="h-5 w-5" />} />
+        <StatCard label="Revenue collected" value={formatINR(s.revenueCollected)} hint="All recorded payments" icon={<CircleDollarSign className="h-5 w-5" />} tone="emerald" />
+        <StatCard label="Outstanding" value={formatINR(s.outstanding)} hint="Confirmed invoices, unpaid balance" icon={<Clock className="h-5 w-5" />} tone="amber" />
+        <StatCard label="Overdue" value={formatINR(s.overdueAmount)} hint={`${s.overdueCount.toLocaleString('en-IN')} invoices past due`} icon={<AlertTriangle className="h-5 w-5" />} tone="rose" />
       </div>
 
-      {/* 4 Big KPI Metric Cards (Section 78-85 of Person 4 Guide) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Active Subscriptions */}
-        <StatCard
-          title="Active Subscriptions"
-          value={`${activeSubscribersCount} Active`}
-          subtitle="Enterprise & SMB recurring accounts"
-          icon={<Users className="w-5 h-5" />}
-          accentColor="indigo"
-          trend={{ value: '18%', positive: true }}
-        />
-
-        {/* Metric 2: Revenue Collected */}
-        <StatCard
-          title="Revenue Collected"
-          value={formatINR(revenueCollectedPaise)}
-          subtitle="Settled via UPI, Card & Wire"
-          icon={<CreditCard className="w-5 h-5" />}
-          accentColor="emerald"
-          trend={{ value: '24%', positive: true }}
-        />
-
-        {/* Metric 3: Total Outstanding */}
-        <StatCard
-          title="Total Outstanding"
-          value={formatINR(totalOutstandingPaise)}
-          subtitle="Uncollected billed receivables"
-          icon={<DollarSign className="w-5 h-5" />}
-          accentColor="amber"
-          trend={{ value: '5%', positive: false }}
-        />
-
-        {/* Metric 4: Overdue Invoices */}
-        <StatCard
-          title="Overdue Invoices"
-          value={`${overdueInvoices.length} Invoices`}
-          subtitle="Exceeded agreed payment terms"
-          icon={<AlertTriangle className="w-5 h-5" />}
-          accentColor="rose"
-          trend={{ value: '2', positive: false }}
-        />
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        <Card title="Collected revenue, last 6 months" className="min-w-0 lg:col-span-2">
+          <RevenueChart data={s.monthlyRevenue} />
+        </Card>
+        <Card title="Subscriptions by status">
+          <ul className="space-y-3">
+            {STATUS_ORDER.map((status) => {
+              const count = s.subscriptionsByStatus[status] ?? 0;
+              return (
+                <li key={status}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <StatusBadge status={status} />
+                    <span className="tabular font-medium text-slate-700">{count.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-100">
+                    <div className="h-1.5 rounded-full bg-primary-500" style={{ width: `${totalSubs ? (count / totalSubs) * 100 : 0}%` }} />
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
       </div>
 
-      {/* Overdue Invoices Priority Action Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
-              <h3 className="font-bold text-base text-slate-900">Overdue Receivables Attention List</h3>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Invoices exceeding due date requiring immediate collection and reminder dispatch.
-            </p>
-          </div>
-          <span className="bg-rose-50 text-rose-700 text-xs font-bold px-2.5 py-1 rounded-lg border border-rose-200">
-            {overdueInvoices.length} Action Items
-          </span>
+      <div className="mt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-900">Overdue invoices</h2>
+          <Link to="/invoices?status=CONFIRMED" className="text-sm font-medium text-primary-600 hover:text-primary-700">
+            View all invoices
+          </Link>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
-                <th className="py-3.5 px-6">Invoice #</th>
-                <th className="py-3.5 px-4">Customer Account</th>
-                <th className="py-3.5 px-4">Due Date</th>
-                <th className="py-3.5 px-4 text-right">Invoice Total</th>
-                <th className="py-3.5 px-4 text-right">Remaining Balance</th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-6 text-right">Quick Action</th>
+        <Table
+          head={
+            <tr>
+              <th className="th">Invoice</th>
+              <th className="th">Customer</th>
+              <th className="th hidden sm:table-cell">Due</th>
+              <th className="th text-right">Balance</th>
+            </tr>
+          }
+        >
+          {overdue.isLoading ? (
+            <TableSkeleton columns={4} rows={4} />
+          ) : overdue.isError ? (
+            <TableMessage columns={4}><ErrorState error={overdue.error} onRetry={() => overdue.refetch()} /></TableMessage>
+          ) : overdue.data!.data.length === 0 ? (
+            <TableMessage columns={4}><EmptyState title="Nothing overdue" description="Every confirmed invoice is within its payment terms." /></TableMessage>
+          ) : (
+            overdue.data!.data.map((inv) => (
+              <tr key={inv.id} className="hover:bg-slate-50">
+                <td className="td">
+                  <Link to={`/invoices/${inv.id}`} className="font-medium text-primary-700 hover:underline">{inv.number}</Link>
+                </td>
+                <td className="td max-w-[12rem] truncate">{inv.customer?.companyName ?? inv.customerName}</td>
+                <td className="td hidden text-rose-600 sm:table-cell">{formatDate(inv.dueDate)}</td>
+                <td className="td tabular text-right font-medium">{formatINR(inv.total - inv.amountPaid)}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {overdueInvoices.map((inv) => {
-                const balanceDue = Math.max(0, inv.total - inv.amountPaid);
-
-                return (
-                  <tr key={inv.id} className="hover:bg-rose-50/30 transition">
-                    <td className="py-4 px-6 font-mono font-bold text-slate-900">
-                      {inv.number}
-                    </td>
-
-                    <td className="py-4 px-4">
-                      <div className="font-semibold text-slate-800">{inv.customerName}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">{inv.customerEmail}</div>
-                    </td>
-
-                    <td className="py-4 px-4 font-bold text-rose-600">
-                      {formatDate(inv.dueDate)}
-                    </td>
-
-                    <td className="py-4 px-4 text-right font-mono font-medium text-slate-900">
-                      {formatINR(inv.total)}
-                    </td>
-
-                    <td className="py-4 px-4 text-right font-mono font-bold text-rose-600">
-                      {formatINR(balanceDue)}
-                    </td>
-
-                    <td className="py-4 px-4 text-center">
-                      <InvoiceStatusBadge status={inv.status} isOverdue={true} />
-                    </td>
-
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => setActivePrintInvoice(inv)}
-                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition"
-                        >
-                          View Bill
-                        </button>
-                        <button
-                          onClick={() => alert(`Payment reminder email sent to ${inv.customerEmail}!`)}
-                          className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold transition shadow-xs"
-                        >
-                          Send Demand Note
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {overdueInvoices.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-slate-400">
-                    No overdue invoices currently. All accounts in good standing!
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))
+          )}
+        </Table>
       </div>
-
-      {/* Printable Invoice Modal */}
-      {activePrintInvoice && (
-        <PrintInvoiceModal
-          invoice={activePrintInvoice}
-          onClose={() => setActivePrintInvoice(null)}
-        />
-      )}
-    </div>
+    </>
   );
 }

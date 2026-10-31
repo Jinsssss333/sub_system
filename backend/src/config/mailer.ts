@@ -1,7 +1,8 @@
 import nodemailer from 'nodemailer';
 import { env } from './env.js';
 
-/** All mail goes to the local Mailpit SMTP server (http://localhost:8025). Nothing leaves the laptop. */
+/** All mail goes to the local Mailpit SMTP server (http://localhost:8025). Nothing leaves the laptop.
+ * SMTP_HOST defaults to 127.0.0.1: nodemailer resolves hostnames itself and can fail on "localhost". */
 export const transporter = nodemailer.createTransport({ host: env.SMTP_HOST, port: env.SMTP_PORT, secure: false });
 
 export interface OutgoingEmail {

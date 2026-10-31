@@ -8,7 +8,7 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url('DATABASE_URL must be a postgresql:// URL'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 characters'),
   JWT_EXPIRES_IN: z.string().default('1d'),
-  SMTP_HOST: z.string().default('localhost'),
+  SMTP_HOST: z.string().default('127.0.0.1'),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
   APP_URL: z.string().url().default('http://localhost:5173'),
   PORT: z.coerce.number().int().positive().default(4000),

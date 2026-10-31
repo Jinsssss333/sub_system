@@ -23,6 +23,7 @@ const listInvoicesSchema = z.object({
     q: z.string().trim().optional(),
     status: z.nativeEnum(InvoiceStatus).optional(),
     customerId: z.string().uuid().optional(),
+    subscriptionId: z.string().uuid().optional(),
     dueDate: z.coerce.date().optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
@@ -44,6 +45,7 @@ const paymentSchema = z.object({
 const myInvoicesSchema = z.object({
   query: z.object({
     status: z.nativeEnum(InvoiceStatus).optional(),
+    subscriptionId: z.string().uuid().optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   }),
@@ -55,10 +57,11 @@ function invoiceScope(user: { role: Role; customerId?: string }) {
 }
 
 // Customer self-service invoices helper
-async function getCustomerInvoices(customerId: string, status?: InvoiceStatus, page = 1, pageSize = 10) {
+async function getCustomerInvoices(customerId: string, status?: InvoiceStatus, page = 1, pageSize = 10, subscriptionId?: string) {
   const where = {
     customerId,
     ...(status ? { status } : {}),
+    ...(subscriptionId ? { subscriptionId } : {}),
   };
   const [total, data] = await Promise.all([
     prisma.invoice.count({ where }),
@@ -67,7 +70,7 @@ async function getCustomerInvoices(customerId: string, status?: InvoiceStatus, p
       orderBy: { issueDate: 'desc' },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { lines: true, payments: true },
+      include: { subscription: { select: { number: true } } },
     }),
   ]);
   return { data, meta: { page, pageSize, total } };
@@ -88,7 +91,7 @@ meInvoicesRouter.get(
       const page = Number(req.query.page) || 1;
       const pageSize = Number(req.query.pageSize) || 10;
       const status = req.query.status as InvoiceStatus | undefined;
-      const result = await getCustomerInvoices(req.user!.customerId, status, page, pageSize);
+      const result = await getCustomerInvoices(req.user!.customerId, status, page, pageSize, req.query.subscriptionId as string | undefined);
       res.json(result);
     } catch (error) {
       next(error);
@@ -123,7 +126,7 @@ invoicesRouter.get('/me', authMiddleware, requireRole(Role.CUSTOMER), validate(m
     const page = Number(req.query.page) || 1;
     const pageSize = Number(req.query.pageSize) || 10;
     const status = req.query.status as InvoiceStatus | undefined;
-    const result = await getCustomerInvoices(req.user!.customerId, status, page, pageSize);
+    const result = await getCustomerInvoices(req.user!.customerId, status, page, pageSize, req.query.subscriptionId as string | undefined);
     res.json(result);
   } catch (error) {
     next(error);
@@ -140,16 +143,18 @@ invoicesRouter.get(
     try {
       const page = Number(req.query.page) || 1;
       const pageSize = Number(req.query.pageSize) || 10;
-      const { q, status, customerId, dueDate } = req.query as {
+      const { q, status, customerId, subscriptionId, dueDate } = req.query as {
         q?: string;
         status?: InvoiceStatus;
         customerId?: string;
+        subscriptionId?: string;
         dueDate?: Date;
       };
 
       const where: Prisma.InvoiceWhereInput = {};
       if (status) where.status = status;
       if (customerId) where.customerId = customerId;
+      if (subscriptionId) where.subscriptionId = subscriptionId;
       if (dueDate) {
         where.dueDate = {
           gte: new Date(Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate())),
@@ -170,7 +175,7 @@ invoicesRouter.get(
           orderBy: { issueDate: 'desc' },
           skip: (page - 1) * pageSize,
           take: pageSize,
-          include: { customer: { select: { id: true, companyName: true } } },
+          include: { customer: { select: { id: true, companyName: true } }, subscription: { select: { number: true } } },
         }),
       ]);
 

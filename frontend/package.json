@@ -8,19 +8,20 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
+    "@brightloop/shared": "*",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@hookform/resolvers": "^3.9.1",
     "@tanstack/react-query": "^5.37.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.378.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-hook-form": "^7.54.2",
     "react-router-dom": "^6.23.1",
     "tailwind-merge": "^2.3.0",
-    "@brightloop/shared": "*",
-    "react-hook-form": "^7.54.2",
-    "@hookform/resolvers": "^3.9.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {

@@ -156,7 +156,8 @@ frontend/vite.config.ts
 | 3 Subscriptions | existing, fixed | 69c9b59 |
 | 4 Financial core | existing, fixed | 5b87a33 |
 | 5 Collection | existing, fixed + built (print, ledger) | 78f6914 |
-| 6 Operations | existing, fixed + built (seed, benchmark) | see below |
+| 6 Operations | existing, fixed + built (seed, benchmark) | 3f64db7 |
+| 7 Frontend | existing, replaced (rebuilt on the real API) | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -306,3 +307,37 @@ Dataset: 5000 subscriptions, 20000 invoices, 17603 payments. 50 samples per endp
 | Customer: my invoices `/me/invoices?page=1&pageSize=20` | 50 | 14.0 | 17.1 | 20.6 |
 
 All endpoints within the 2000 ms budget.
+
+
+### Gate 7 — Frontend: existing, replaced with a standard UI on the real API
+
+Existing: the team's pages read from `api/mockData.ts` when the API failed, used conditional hooks in `PaymentModal`, and had no routes for taxes, templates, users, password reset or the customer invoice list. Those files were removed with `git rm` and the frontend was rebuilt (React, Vite, Tailwind, React Router, TanStack Query, react-hook-form + shared Zod, lucide-react, Inter bundled locally via `@fontsource-variable/inter`; no CDN).
+
+- No mock fallback: every screen reads PostgreSQL through `/api`; a network failure shows an error state with retry.
+- Role-based shell: admin (catalog, taxes, users), staff (subscriptions, invoices, payments, customers), customer portal (subscriptions, invoices, profile). Unknown routes redirect to the role's home.
+- Every list is server-paginated with search/filters, skeleton, empty and error states. Forms use the shared Zod rules; server field errors are mapped back onto inputs.
+- Money is entered in rupees and sent as integer paise; percentages as basis points. Payment modal pre-fills the balance and rejects amounts above it before the server does.
+- Backend additions for the UI: `subscriptionId` filter on `/api/invoices` and `/api/me/invoices`; subscription number in invoice lists.
+- Fixed during QA: `SMTP_HOST` default is now `127.0.0.1` (nodemailer failed to resolve `localhost` here, so Mailpit mail was silently not delivered); dashboard stat cards no longer truncate amounts; revenue chart uses compact labels (₹1.85 Cr) and no longer overflows at 375 px; payment methods shown as "UPI", "Bank transfer".
+
+Frontend unit tests (`src/lib/forms.test.ts`, 11): rupee→paise parsing and limits, percent→bps, quantity bounds, query building, error-envelope parsing, server-field mapping, display formatting.
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 16 problems (0 errors, 16 warnings)
+$ npm run build          -> exit 0 (dist/assets/index-*.js 448.13 kB, gzip 127.09 kB; built in 3.73s)
+$ npm test -w backend    -> Test Files 11 passed (11) | Tests 78 passed (78)
+$ npm test -w frontend   -> Test Files 1 passed (1) | Tests 11 passed (11)
+```
+
+Browser QA (Playwright 1.59 headless Chromium against `npm run dev` for backend :4000 and frontend :5173, full seed, Mailpit binary on :1025/:8025). The script was run from the sandbox and is not committed.
+
+| Check | 1440×900 | 375×812 |
+| --- | --- | --- |
+| Smoke: all 12 admin routes + 3 customer routes load, 0 console errors, 0 API 4xx/5xx | pass | pass |
+| No horizontal page overflow on any route | pass | pass (after the chart fix) |
+| Flow 1 admin: create product (₹1,000) → plan (₹500/month) → subscription for Acme ×2 with 5% tax → quotation → confirm → activate → Run billing → invoice INV total ₹2,600.00 (₹2,000 + ₹100 tax + ₹500 untaxed base fee) → confirm | pass | pass |
+| Flow 2 staff: record payment ₹2,601 rejected ("Amount cannot exceed the balance of ₹2,600.00"); ₹100 then balance ₹2,500 → invoice PAID; both rows in the payments ledger | pass | pass |
+| Flow 3 customer: portal, my invoices, invoice detail incl. the invoices paid in flow 2 | pass | pass |
+| Password reset: forgot form → email in Mailpit → link resets password → login works → reusing the link is rejected; no token in the API log | — | pass |
+| Invoice email: `POST /api/invoices/:id/send` delivered to Mailpit | pass (API) | — |

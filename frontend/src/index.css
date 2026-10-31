@@ -2,27 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Printable Invoice styling */
-@media print {
-  @page { margin: 16mm; }
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-slate-50 text-slate-900 font-sans antialiased; font-feature-settings: 'cv11', 'ss01'; }
+  :focus-visible { @apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-white; }
+  .tabular { font-variant-numeric: tabular-nums; }
+}
 
-  body {
-    background-color: white !important;
-    color: black !important;
+@layer components {
+  .input {
+    @apply block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400
+      transition focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500;
   }
+  .input-error { @apply border-rose-400 focus:border-rose-500 focus:ring-rose-500/20; }
+  .label { @apply mb-1.5 block text-sm font-medium text-slate-700; }
+  .card { @apply rounded-xl border border-slate-200 bg-white shadow-card; }
+  .th { @apply whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500; }
+  .td { @apply whitespace-nowrap px-4 py-3 text-sm text-slate-700; }
+}
 
-  #root {
-    display: block !important;
-  }
-
-  .no-print {
-    display: none !important;
-  }
-
-  .print-document {
-    max-width: none !important;
-    border: 0 !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-  }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

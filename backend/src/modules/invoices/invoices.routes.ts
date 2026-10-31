@@ -97,8 +97,9 @@ subscriptionInvoicesRouter.post(
   validate(generateSubscriptionInvoiceSchema),
   async (req, res, next) => {
     try {
-      const invoice = await generateInvoice(req.params.id, req.body.periodStart);
-      res.status(201).json({ data: invoice });
+      const outcome = await generateInvoice(req.params.id, req.body.periodStart);
+      if (outcome.status === 'closed') throw new FinanceError('Subscription reached its end date and was closed', 409, 'SUBSCRIPTION_CLOSED');
+      res.status(outcome.status === 'created' ? 201 : 200).json({ data: outcome.invoice, meta: { created: outcome.status === 'created' } });
     } catch (error) {
       next(error);
     }

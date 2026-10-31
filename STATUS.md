@@ -153,7 +153,8 @@ frontend/vite.config.ts
 | 0 Foundation | existing, fixed | e24ec18 |
 | 1 Identity | existing, fixed | dc31025 |
 | 2 Catalog | existing, fixed + built (discounts) | c8bd88e |
-| 3 Subscriptions | existing, fixed | see below |
+| 3 Subscriptions | existing, fixed | 69c9b59 |
+| 4 Financial core | existing, fixed | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -229,4 +230,23 @@ $ npm run typecheck      -> exit 0
 $ npx eslint .           -> exit 0, ✖ 28 problems (0 errors, 28 warnings)
 $ npm run build          -> exit 0
 $ npm test -w backend    -> Test Files 7 passed (7) | Tests 46 passed (46)
+```
+
+### Gate 4 — Financial core: existing, fixed
+
+Existing and kept: pure integer pricing (`utils/pricing.ts`: PRODUCT then SUBSCRIPTION discounts, proportional allocation with bounded remainder, half-up tax on the net amount), date clamping with anchor recovery, `generateInvoice` in one transaction with a subscription row lock and the `(subscriptionId, periodStart)` unique constraint, plan base-fee line (untaxed), `runBilling` with 12-cycle catch-up.
+Fixed:
+- **`runBilling` passed `today` as the requested period**, so every scheduled run failed with INVALID_PERIOD_START unless the cursor happened to equal today. It now calls `generateInvoice(id, undefined, today)`.
+- **Auto-close was rolled back** because the code threw after updating; it now commits `CLOSED` and returns `{ status: 'closed' }`.
+- Discount usage was checked against values read *before* the row lock; it now locks in id order, re-reads, and claims with a conditional `UPDATE ... WHERE timesUsed < usageLimit` (plus the DB CHECK).
+- If a unique-constraint race still occurs (P2002) the call returns the winner's invoice; an existing invoice at the cursor repairs the cursor instead of looping.
+- `generateInvoice` now returns `{ status: 'created' | 'existing' | 'closed', invoice }`; `runBilling` reports `generated`, `closed`, `failures`, `durationMs`.
+
+Tests: `test/billing.test.ts` (9) and `test/pricing.more.test.ts` (9) — exact invoice totals with plan fee/tax/due date/period end and cursor advance; snapshots unchanged after catalog price and tax changes; product-then-subscription discount totals and usage claim; usage-limit-1 discount raced by two subscriptions → applied once; paused/inactive/not-due refusals; committed auto-close; **concurrency test (1): two simultaneous requests for the same period → one `created`, one `existing`, one row**; catch-up of 15 missed periods (12 + 3) then 3 idempotent re-runs with no duplicates; paused skipped and one failing subscription isolated. Pure tests: half-up rounding, discount scope and order independence, floor at zero, min purchase/quantity, totals consistency, invalid input and Int-range rejection, period ends, 12-month anchor stability.
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 28 problems (0 errors, 28 warnings)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 9 passed (9) | Tests 64 passed (64)
 ```

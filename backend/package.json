@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "billing:run": "tsx src/jobs/billing.job.ts"
+    "billing:run": "tsx src/jobs/billing.job.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",
@@ -33,7 +34,7 @@
     "@types/nodemailer": "^6.4.15",
     "prisma": "^5.14.0",
     "tsx": "^4.10.5",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^4.1.12"
   }
 }
-

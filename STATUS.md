@@ -157,7 +157,8 @@ frontend/vite.config.ts
 | 4 Financial core | existing, fixed | 5b87a33 |
 | 5 Collection | existing, fixed + built (print, ledger) | 78f6914 |
 | 6 Operations | existing, fixed + built (seed, benchmark) | 3f64db7 |
-| 7 Frontend | existing, replaced (rebuilt on the real API) | see below |
+| 7 Frontend | existing, replaced (rebuilt on the real API) | 748112f |
+| 8 Hardening & docs | built | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -341,3 +342,51 @@ Browser QA (Playwright 1.59 headless Chromium against `npm run dev` for backend 
 | Flow 3 customer: portal, my invoices, invoice detail incl. the invoices paid in flow 2 | pass | pass |
 | Password reset: forgot form → email in Mailpit → link resets password → login works → reusing the link is rejected; no token in the API log | — | pass |
 | Invoice email: `POST /api/invoices/:id/send` delivered to Mailpit | pass (API) | — |
+
+
+### Gate 8 — Hardening and docs: built
+
+- `npm audit fix` (non-breaking) changed nothing. Remaining: 19 advisories (16 moderate, 3 high); each fix needs a major upgrade, so they are recorded rather than forced:
+  - `zod` < 4.6.6 (high, memory exhaustion on oversized collections). Exposure is limited because `express.json` is capped at 100 kb and arrays are bounded (≤ 10 lines).
+  - `nodemailer` ≤ 10.1.3 (high, DoS from a malicious SMTP server, address-comment parsing). It only talks to local Mailpit.
+  - `react-router` 6 (moderate, open redirect via backslash; SSR hydration). Navigation targets here are internal constants or router state, and there is no SSR.
+  - `uuid` via `node-cron` 3 (moderate, `buf` argument not used); `esbuild`/`minimatch` (dev tooling only).
+- README: real setup commands, a Mermaid ER diagram and a 3-minute demo script that matches the browser-verified flows. DECISIONS: resume rule, no default customer password, money limits, snapshots, discount claims, pagination, SMTP host.
+- Final reseed `Seed complete in 8.1s: 207 users, 5000 subscriptions, 20000 invoices, 17603 payments.`
+
+```
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 16 problems (0 errors, 16 warnings: legacy `any`)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 11 passed (11) | Tests 78 passed (78)
+$ npm test -w frontend   -> Test Files 1 passed (1) | Tests 11 passed (11)
+$ npm run bench          -> All endpoints within the 2000 ms budget.
+```
+
+Benchmark (PostgreSQL 16.15, sequential HTTP on localhost):
+
+Dataset: 5000 subscriptions, 20000 invoices, 17603 payments. 50 samples per endpoint after 5 warm-up calls.
+| Endpoint | n | p50 (ms) | p95 (ms) | max (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Subscriptions, page 1 `/subscriptions?page=1&pageSize=20` | 50 | 7.9 | 11.1 | 15.1 |
+| Subscriptions, last page `/subscriptions?page=250&pageSize=20` | 50 | 9.5 | 15.6 | 16.4 |
+| Subscriptions, search `/subscriptions?q=Lotus&page=1&pageSize=20` | 50 | 25.2 | 31.5 | 34.7 |
+| Subscriptions, ACTIVE filter `/subscriptions?status=ACTIVE&page=1&pageSize=20` | 50 | 7.7 | 10.7 | 15.0 |
+| Invoices, page 1 `/invoices?page=1&pageSize=20` | 50 | 3.5 | 5.7 | 10.4 |
+| Invoices, last page `/invoices?page=1000&pageSize=20` | 50 | 11.8 | 16.2 | 17.3 |
+| Invoices, search `/invoices?q=INV-0100&page=1&pageSize=20` | 50 | 18.8 | 24.5 | 24.8 |
+| Payments ledger `/payments?page=1&pageSize=20` | 50 | 3.7 | 5.9 | 8.1 |
+| Customers `/customers?page=1&pageSize=20` | 50 | 2.7 | 4.6 | 6.6 |
+| Finance summary `/reports/summary` | 50 | 8.6 | 11.8 | 15.1 |
+| Overdue invoices `/reports/overdue?page=1&pageSize=20` | 50 | 3.4 | 4.7 | 6.9 |
+| Customer: my subscriptions `/me/subscriptions?page=1&pageSize=20` | 50 | 5.8 | 9.3 | 13.3 |
+| Customer: my invoices `/me/invoices?page=1&pageSize=20` | 50 | 2.5 | 4.8 | 6.0 |
+
+## Not verified here (honest gaps)
+
+- **Docker is unavailable in this sandbox**, so `docker compose up` (postgres:16 + Mailpit images, init-test-db.sql) was never run. Everything was verified against a native PostgreSQL 16.15 and the Mailpit binary.
+- Automated tests mock the mail transport. Real Mailpit delivery (reset email, invoice email) was checked manually in the browser and API QA of gate 7, not in CI.
+- The team's `backend/tests/verify_person_1.ts` and `verify_person_2.ts` scripts were not updated for the new APIs and were not run.
+- Only the 2 agreed concurrency tests exist (same-period invoice, two payments over the balance). There is no serializable-retry framework (by agreement).
+- Browser QA covered the 3 agreed flows at 1440 px and 375 px plus a route smoke test. Discounts, templates and the users pages were loaded but not exercised end to end in the browser.
+- The npm advisories listed above remain open.

@@ -277,7 +277,7 @@ async function main() {
 
   // 10. Create Representative Invoices (Paid, Confirmed, Overdue)
   // INV-000101: PAID
-  const paidInvoice = await prisma.invoice.create({
+  await prisma.invoice.create({
     data: {
       number: 'INV-000101',
       subscriptionId: activeSub.id,

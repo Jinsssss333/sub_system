@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { errorHandler } from './middleware/errorHandler.js';
+import { prisma } from './config/db.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Person 1 routers (Identity & Catalog)
 import { authRouter } from './modules/auth/auth.routes.js';
@@ -28,15 +29,20 @@ import { reportsRouter } from './modules/reports/reports.routes.js';
 
 export const app = express();
 
+app.disable('x-powered-by');
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 
-// Public health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    system: 'Brightloop Subscription Platform',
-    timestamp: new Date().toISOString(),
+// Public health check: reports API and database reachability.
+app.get('/api/health', async (_req, res) => {
+  let database: 'up' | 'down' = 'up';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch {
+    database = 'down';
+  }
+  res.status(database === 'up' ? 200 : 503).json({
+    data: { status: database === 'up' ? 'ok' : 'degraded', database, system: 'Brightloop Subscription Platform', timestamp: new Date().toISOString() },
   });
 });
 
@@ -60,5 +66,6 @@ app.use('/api/me/invoices', meInvoicesRouter);
 app.use('/api/payments', paymentsRouter);
 app.use('/api/reports', reportsRouter);
 
-// Centralized error handling
+// Unknown API routes and centralized error handling
+app.use('/api', notFoundHandler);
 app.use(errorHandler);

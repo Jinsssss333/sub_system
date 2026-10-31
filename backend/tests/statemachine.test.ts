@@ -1,13 +1,13 @@
+import { expect, it } from 'vitest';
 import { SubscriptionStatus } from '@prisma/client';
 import { ALLOWED_TRANSITIONS } from '../src/modules/subscriptions/subscriptions.service.js';
 
 function assert(condition: boolean, message: string) {
-  if (!condition) {
-    throw new Error(`Assertion failed: ${message}`);
-  }
+  expect(condition, message).toBe(true);
 }
 
-console.log('--- Running Subscription State Machine Tests ---');
+it('subscription state machine map (team suite)', () => {
+void ('--- Running Subscription State Machine Tests ---');
 
 // 1. Check strict allowed transitions
 assert(ALLOWED_TRANSITIONS.DRAFT.length === 1 && ALLOWED_TRANSITIONS.DRAFT[0] === 'QUOTATION', 'DRAFT -> QUOTATION only');
@@ -15,7 +15,7 @@ assert(ALLOWED_TRANSITIONS.QUOTATION.length === 1 && ALLOWED_TRANSITIONS.QUOTATI
 assert(ALLOWED_TRANSITIONS.CONFIRMED.length === 1 && ALLOWED_TRANSITIONS.CONFIRMED[0] === 'ACTIVE', 'CONFIRMED -> ACTIVE only');
 assert(ALLOWED_TRANSITIONS.ACTIVE.length === 1 && ALLOWED_TRANSITIONS.ACTIVE[0] === 'CLOSED', 'ACTIVE -> CLOSED only');
 assert(ALLOWED_TRANSITIONS.CLOSED.length === 0, 'CLOSED has no allowed transitions');
-console.log('✓ Valid transition paths verified');
+void ('✓ Valid transition paths verified');
 
 // 2. Check forbidden transitions
 const allStatuses: SubscriptionStatus[] = ['DRAFT', 'QUOTATION', 'CONFIRMED', 'ACTIVE', 'CLOSED'];
@@ -43,5 +43,6 @@ for (const s of allStatuses) {
   assert(!ALLOWED_TRANSITIONS.CLOSED.includes(s), `CLOSED -> ${s} is forbidden`);
 }
 
-console.log('✓ All illegal state jumps correctly rejected');
-console.log('🎉 ALL STATE MACHINE TESTS PASSED SUCCESSFULLY!');
+void ('✓ All illegal state jumps correctly rejected');
+void ('🎉 ALL STATE MACHINE TESTS PASSED SUCCESSFULLY!');
+});

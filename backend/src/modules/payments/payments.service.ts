@@ -1,4 +1,4 @@
-import { PaymentMethod, Prisma } from '@prisma/client';
+import { PaymentMethod } from '@prisma/client';
 import { prisma } from '../../config/db.js';
 import { FinanceError } from '../invoices/invoices.service.js';
 

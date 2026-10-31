@@ -1,6 +1,6 @@
 import { prisma } from '../../config/db.js';
 import { ApiError } from '../../utils/errors.js';
-import { CreateTemplateInput, UpdateTemplateInput } from './templates.schema.js';
+import { CreateTemplateInput } from './templates.schema.js';
 
 export class TemplatesService {
   /**

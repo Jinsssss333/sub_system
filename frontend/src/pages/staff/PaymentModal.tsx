@@ -16,14 +16,14 @@ interface PaymentModalProps {
 }
 
 export function PaymentModal({ invoice, onClose, onRecordPayment }: PaymentModalProps) {
-  if (!invoice) return null;
-
-  const remainingBalancePaise = Math.max(0, invoice.total - invoice.amountPaid);
+  const remainingBalancePaise = invoice ? Math.max(0, invoice.total - invoice.amountPaid) : 0;
   // Default amount in rupees for input
   const [amountRupees, setAmountRupees] = useState<string>((remainingBalancePaise / 100).toFixed(2));
   const [method, setMethod] = useState<'UPI' | 'CARD' | 'CASH' | 'BANK_TRANSFER' | 'CHEQUE'>('UPI');
   const [note, setNote] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+
+  if (!invoice) return null;
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();

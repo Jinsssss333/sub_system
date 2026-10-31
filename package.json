@@ -1,0 +1,35 @@
+{
+  "name": "brightloop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Brightloop Subscription Management System (monorepo)",
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "postinstall": "npm run build -w @brightloop/shared",
+    "build": "npm run build -w @brightloop/shared && npm run build -w backend && npm run build -w frontend",
+    "typecheck": "npm run typecheck -w @brightloop/shared && npm run typecheck -w backend && npm run typecheck -w frontend",
+    "lint": "eslint .",
+    "test": "npm run test -w backend && npm run test -w frontend",
+    "dev:api": "npm run dev -w backend",
+    "dev:web": "npm run dev -w frontend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:deploy": "npm run db:deploy -w backend",
+    "db:seed": "npm run db:seed -w backend",
+    "bench": "npm run bench -w backend"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.18.2"
+  },
+  "type": "module"
+}

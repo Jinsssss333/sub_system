@@ -1,19 +1,11 @@
 import { z } from 'zod';
+import { paginationQuery, templateBody, templateLineBody } from '@brightloop/shared';
 
-export const createTemplateLineSchema = z.object({
-  productId: z.string().uuid({ message: 'Valid productId UUID is required' }),
-  variantId: z.string().uuid({ message: 'variantId must be a valid UUID' }).nullable().optional(),
-  quantity: z.number().int().min(1, { message: 'Quantity must be at least 1' }),
-});
+export const createTemplateLineSchema = templateLineBody;
 
-export const createTemplateSchema = z.object({
-  body: z.object({
-    name: z.string().trim().min(1, { message: 'Template name is required' }),
-    planId: z.string().uuid({ message: 'Valid planId UUID is required' }),
-    validityDays: z.number().int().min(1, { message: 'validityDays must be at least 1 day' }),
-    lines: z.array(createTemplateLineSchema).min(1, { message: 'At least one line item is required' }),
-  }),
-});
+export const createTemplateSchema = z.object({ body: templateBody });
+
+export const listTemplatesQuerySchema = z.object({ query: paginationQuery });
 
 export const updateTemplateSchema = z.object({
   params: z.object({

@@ -1,221 +1,94 @@
 /**
- * API Client & Resilient Data Bridge for Brightloop Platform
- * 
- * Capabilities:
- * - Connects to Express backend via /api/* with automatic Bearer JWT header
- * - Automatic background authentication sync for demo roles (Admin, Staff, Customer)
- * - Graceful fallback to rich seed mock data whenever backend or database is offline
- * - Zero blank screen guarantee
+ * Thin fetch wrapper for the Brightloop API.
+ * - Adds the Bearer token
+ * - Unwraps the `{ error: { code, message, fields } }` envelope into ApiError
+ * - Signs the user out on 401
+ * There is no mock or offline fallback: every screen shows real database data.
  */
+const TOKEN_KEY = 'brightloop.token';
 
-import { 
-  Product, 
-  Plan, 
-  Discount, 
-  Subscription, 
-  Invoice, 
-  initialProducts, 
-  initialPlans, 
-  initialDiscounts, 
-  initialSubscriptions, 
-  initialInvoices 
-} from './mockData';
-
-export async function apiRequest<T = any>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
-  const token = localStorage.getItem('token');
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+    public readonly fields: Record<string, string> = {},
+  ) {
+    super(message);
+    this.name = 'ApiError';
   }
-
-  const response = await fetch(`/api${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || data.message || `API request failed with status ${response.status}`);
-  }
-
-  return data;
 }
 
-// Demo credentials mapping
-export const DEMO_CREDENTIALS = {
-  ADMIN: { email: 'admin@brightloop.test', password: 'Admin@1234' },
-  STAFF: { email: 'staff@brightloop.test', password: 'Staff@1234' },
-  CUSTOMER: { email: 'customer@brightloop.test', password: 'Customer@1234' },
+export const tokenStore = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (token: string) => localStorage.setItem(TOKEN_KEY, token),
+  clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
-// Auto-authenticate when role switches
-export async function authenticateRole(role: 'ADMIN' | 'STAFF' | 'CUSTOMER'): Promise<boolean> {
-  const creds = DEMO_CREDENTIALS[role];
+let onUnauthorized: () => void = () => {};
+export const setUnauthorizedHandler = (handler: () => void) => {
+  onUnauthorized = handler;
+};
+
+export async function parseError(response: Response): Promise<ApiError> {
+  const body = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string; fields?: Record<string, string> } } | null;
+  const fallback = response.status >= 500 ? 'The server had a problem. Please try again.' : `Request failed (${response.status})`;
+  return new ApiError(response.status, body?.error?.code ?? 'ERROR', body?.error?.message ?? fallback, body?.error?.fields ?? {});
+}
+
+type Query = Record<string, string | number | boolean | null | undefined>;
+
+export function buildQuery(query?: Query) {
+  if (!query) return '';
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  const text = params.toString();
+  return text ? `?${text}` : '';
+}
+
+async function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
+  const token = tokenStore.get();
+  let response: Response;
   try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(creds),
+    response = await fetch(`/api${path}${buildQuery(query)}`, {
+      method,
+      headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-
-    if (res.ok) {
-      const data = await res.json();
-      if (data.data?.token) {
-        localStorage.setItem('token', data.data.token);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        return true;
-      }
-    }
-  } catch (err) {
-    // Backend offline; continue with local session
-  }
-  return false;
-}
-
-// Resilient API services with seed fallback
-export async function getProducts(): Promise<Product[]> {
-  try {
-    const res = await apiRequest('/products');
-    if (res && Array.isArray(res.data) && res.data.length > 0) {
-      return res.data;
-    }
   } catch {
-    // fallback
+    throw new ApiError(0, 'NETWORK', 'Cannot reach the Brightloop API. Is the backend running on port 4000?');
   }
-  return initialProducts;
+  if (response.status === 401 && token) onUnauthorized();
+  if (!response.ok) throw await parseError(response);
+  const text = await response.text();
+  return (text ? JSON.parse(text) : {}) as T;
 }
 
-export async function getPlans(): Promise<Plan[]> {
-  try {
-    const res = await apiRequest('/plans');
-    if (res && Array.isArray(res.data) && res.data.length > 0) {
-      return res.data;
+export const api = {
+  get: <T>(path: string, query?: Query) => request<T>('GET', path, undefined, query),
+  post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
+  patch: <T>(path: string, body: unknown) => request<T>('PATCH', path, body),
+  delete: <T>(path: string) => request<T>('DELETE', path),
+  /** Fetches the server-rendered (HTML-escaped) invoice and opens it in a new tab for printing. */
+  async openInvoicePrint(invoiceId: string) {
+    const win = window.open('', '_blank');
+    const token = tokenStore.get();
+    const response = await fetch(`/api/invoices/${invoiceId}/print`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!response.ok) {
+      win?.close();
+      throw await parseError(response);
     }
-  } catch {
-    // fallback
-  }
-  return initialPlans;
-}
+    const url = URL.createObjectURL(new Blob([await response.text()], { type: 'text/html' }));
+    if (win) win.location.href = url;
+    else window.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  },
+};
 
-export async function getDiscounts(): Promise<Discount[]> {
-  try {
-    const res = await apiRequest('/discounts');
-    if (res && Array.isArray(res.data) && res.data.length > 0) {
-      return res.data;
-    }
-  } catch {
-    // fallback
-  }
-  return initialDiscounts;
+export interface Page<T> {
+  data: T[];
+  meta: { page: number; pageSize: number; total: number };
 }
-
-export async function getSubscriptions(): Promise<Subscription[]> {
-  try {
-    const res = await apiRequest('/subscriptions');
-    if (res && Array.isArray(res.data) && res.data.length > 0) {
-      return res.data.map((s: any) => ({
-        id: s.id,
-        number: s.number,
-        customerId: s.customerId,
-        customerName: s.customer?.companyName || s.customer?.user?.name || 'Customer',
-        customerEmail: s.customer?.user?.email || '',
-        planId: s.planId,
-        planName: s.plan?.name || 'Plan',
-        status: s.status,
-        startDate: s.startDate,
-        expiryDate: s.expiryDate,
-        paymentTermDays: s.paymentTermDays || 15,
-        nextInvoiceDate: s.nextInvoiceDate,
-        pausedAt: s.pausedAt,
-        lines: (s.lines || []).map((l: any) => ({
-          id: l.id,
-          productId: l.productId,
-          productName: l.product?.name || 'Product',
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          taxRateBps: l.tax?.rateBps || 1800,
-          amount: l.amount,
-        })),
-      }));
-    }
-  } catch {
-    // fallback
-  }
-  return initialSubscriptions;
-}
-
-export async function getInvoices(): Promise<Invoice[]> {
-  try {
-    const res = await apiRequest('/invoices');
-    if (res && Array.isArray(res.data) && res.data.length > 0) {
-      return res.data.map((inv: any) => ({
-        id: inv.id,
-        number: inv.number,
-        subscriptionId: inv.subscriptionId,
-        subscriptionNumber: inv.subscription?.number || '',
-        customerId: inv.customerId,
-        customerName: inv.customer?.companyName || inv.customer?.user?.name || 'Customer',
-        customerEmail: inv.customer?.user?.email || '',
-        periodStart: inv.periodStart,
-        periodEnd: inv.periodEnd,
-        status: inv.status,
-        subtotal: inv.subtotal,
-        discountTotal: inv.discountTotal || 0,
-        taxTotal: inv.taxTotal,
-        total: inv.total,
-        amountPaid: inv.amountPaid || 0,
-        issueDate: inv.issueDate,
-        dueDate: inv.dueDate,
-        lines: (inv.lines || []).map((l: any) => ({
-          id: l.id,
-          description: l.description,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          discountAmount: l.discountAmount || 0,
-          taxRateBps: l.taxRateBps || 1800,
-          taxAmount: l.taxAmount,
-          amount: l.amount,
-        })),
-        payments: (inv.payments || []).map((p: any) => ({
-          id: p.id,
-          method: p.method,
-          amount: p.amount,
-          paidOn: p.paidOn,
-          note: p.note,
-        })),
-      }));
-    }
-  } catch {
-    // fallback
-  }
-  return initialInvoices;
-}
-
-export async function postPayment(
-  invoiceId: string,
-  paymentData: { method: string; amount: number; paidOn?: string; note?: string }
-): Promise<any> {
-  try {
-    return await apiRequest(`/invoices/${invoiceId}/payments`, {
-      method: 'POST',
-      body: JSON.stringify({
-        method: paymentData.method,
-        amount: paymentData.amount,
-        paidOn: paymentData.paidOn || new Date().toISOString(),
-        note: paymentData.note,
-      }),
-    });
-  } catch (err) {
-    console.warn('Backend payment submission failed, recording locally:', err);
-    return null;
-  }
+export interface One<T> {
+  data: T;
 }

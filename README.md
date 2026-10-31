@@ -316,35 +316,59 @@ Adopted directly from the **Handoff Specification (Section 13)**:
 
 ## 9. Local Quickstart & Setup Guide
 
+Everything runs on your laptop: PostgreSQL 16 and Mailpit in Docker, API and web app with Node. No cloud services, CDN fonts or external APIs.
+
 ### Prerequisites
-* **Node.js** 20+
-* **PostgreSQL 16** (Native Windows service or Docker)
-* **Git**
+* **Node.js** 20+ and npm 10+
+* **Docker** with Compose (or a native PostgreSQL 16 on port 5432 with user `app`/`app` and databases `billing` and `billing_test`, plus a Mailpit binary)
 
-### 1. Database Configuration
-Ensure PostgreSQL is running locally on port 5432 with database `billing`:
-```env
-# backend/.env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/billing"
-```
-
-### 2. Backend Setup
+### Commands
 ```bash
-cd backend
-npm install
-npx prisma db push
-npm run db:seed
-npm run dev
-# Backend API runs on: http://localhost:4000
+docker compose up -d                       # postgres:16 on :5432, Mailpit SMTP :1025 / UI http://localhost:8025
+cp backend/.env.example backend/.env       # local defaults; change JWT_SECRET
+cp backend/.env.test.example backend/.env.test
+npm install                                # installs all workspaces and builds @brightloop/shared
+npm run db:deploy                          # apply Prisma migrations (use npm run db:migrate while developing)
+npm run db:seed                            # demo story + 5,000 subscriptions / 20,000 invoices (~8 s); SEED_SIZE=small for demo data only
+npm test                                   # backend (Vitest + Supertest on billing_test) and frontend unit tests
+npm run typecheck && npm run lint && npm run build
+npm run bench                              # p50/p95 per list endpoint on the seeded data; fails if any p95 >= 2 s
+
+npm run dev -w backend                     # API on http://localhost:4000 (health: /api/health)
+npm run dev -w frontend                    # web app on http://localhost:5173 (proxies /api to :4000)
 ```
 
-### 3. Frontend Setup
-```bash
-cd ../frontend
-npm install
-npm run dev
-# Frontend application runs on: http://localhost:5173
+Password-reset links and invoice emails go only to Mailpit (http://localhost:8025). They are never written to logs.
+
+### Data model
+
+Money is integer paise; tax rates are integer basis points. Invoice lines snapshot description, quantity, unit price, discount and tax at generation time.
+
+```mermaid
+erDiagram
+  User ||--o| Customer : "has profile (role CUSTOMER)"
+  User ||--o{ PasswordResetToken : requests
+  Customer ||--o{ Subscription : owns
+  Customer ||--o{ Invoice : billed
+  Plan ||--o{ Subscription : "billing period + base fee"
+  Product ||--o{ ProductVariant : has
+  Product ||--o{ SubscriptionLine : "sold as"
+  ProductVariant |o--o{ SubscriptionLine : "optional variant"
+  Tax |o--o{ SubscriptionLine : "optional tax"
+  Subscription ||--|{ SubscriptionLine : contains
+  Subscription ||--o{ SubscriptionDiscount : applies
+  Discount ||--o{ SubscriptionDiscount : "used by"
+  Discount ||--o{ DiscountProduct : "PRODUCT scope"
+  Product ||--o{ DiscountProduct : targeted
+  QuotationTemplate ||--|{ QuotationTemplateLine : contains
+  QuotationTemplate |o--o{ Subscription : "created from"
+  Subscription ||--o{ Invoice : "one per period (unique subscriptionId, periodStart)"
+  Invoice ||--|{ InvoiceLine : "snapshotted lines"
+  Invoice ||--o{ Payment : "receives (sum <= total)"
+  User ||--o{ Payment : "recorded by"
 ```
+
+`Counter` (not drawn) issues sequential `SUB-` and `INV-` numbers with an atomic upsert-increment.
 
 ---
 
@@ -354,22 +378,15 @@ npm run dev
 
 | Role | Email | Password | Access Level |
 | :--- | :--- | :--- | :--- |
-| **Admin** | `admin@brightloop.test` | `Admin@1234` | Full system access (Catalog, Staff creation, Billing job, Discounts, Finance) |
-| **Staff** | `staff@brightloop.test` | `Staff@1234` | Operations (Quotes, Subscriptions, Invoices, Payments) |
-| **Customer** | `customer@brightloop.test` | `Customer@1234` | Self-Service Portal (Own subscriptions and invoices only) |
+| **Admin** | `admin@brightloop.test` | `Admin@1234` | Everything, plus catalog edits, taxes, users and the billing run |
+| **Staff** | `staff@brightloop.test` | `Staff@1234` | Customers, quotations, subscriptions, invoices and payments |
+| **Customer** | `customer@brightloop.test` | `Customer@1234` | Portal for Acme Retail Pvt Ltd only |
 
----
+Customers created by staff get no default password; they set one through the reset email in Mailpit.
 
-### The 3-Minute Live Demo Script for Judges
+### The 3-Minute Live Demo Script
 
-* **Minute 1: The Problem & Architecture (Person 4 / Pitch Lead)**
-  * *"Judges, Brightloop Software was losing revenue due to missed renewals and manual invoicing. We built a 100% offline, local-first subscription engine running PostgreSQL and local SMTP via Docker."*
-  * Show `docker-compose.yml` and highlight that no cloud service or external API is required.
-* **Minute 2: The Core Operational Flow (Person 1 & Person 2)**
-  * Log in as **Admin**: Show the product catalog with the **Odoo variant (+₹560)** and a monthly recurring plan.
-  * Switch to **Staff**: Create a subscription from a quote template $\rightarrow$ walk status from `Draft` $\rightarrow$ `Quotation` $\rightarrow$ `Confirmed` $\rightarrow$ `Active`.
-  * Trigger the billing engine $\rightarrow$ show the invoice generated with automated tax and discount math.
-  * Record a payment $\rightarrow$ watch status flip to `PAID`.
-* **Minute 3: Customer Isolation & Finance Analytics (Person 3 & Person 4)**
-  * Switch to **Customer**: Show that the customer sees *only* their own subscription and invoice, proving customer data isolation.
-  * Switch back to **Admin / Finance Lead**: Open the Finance Dashboard to show real-time active subscriptions, revenue collected, and overdue invoices calculated instantly via database aggregations in under 2 seconds.
+1. **Admin setup (about 60 s).** Sign in as admin. Products: show Brightloop Business Suite with the Odoo Edition variant (+₹560). Plans: create a monthly plan at ₹500. Taxes: show GST 5/12/18%.
+2. **Quote to invoice (about 60 s).** Subscriptions → New subscription for Acme Retail, pick the plan, add the product ×2 with 5% tax (or use a quote template). Send as quotation → Confirm order → Activate. Dashboard → Run billing now. Open the new invoice: ₹2,000 + ₹100 tax + ₹500 untaxed base fee = ₹2,600. Confirm it, then Email (shows up in Mailpit).
+3. **Staff payments (about 30 s).** Sign in as staff, open the invoice, Record payment. Try ₹2,601 and show it is rejected; record ₹100, then the rest; the invoice turns Paid and both rows appear in Payments.
+4. **Customer portal (about 30 s).** Sign in as the customer: only Acme's subscriptions and invoices appear. Print the invoice. Use "Forgot password" and open the link from Mailpit. Finish on the admin dashboard: revenue, outstanding and overdue totals come from SQL aggregates over 20,000 invoices, with list p95 well under 2 s (see STATUS.md).

@@ -7,6 +7,7 @@ import {
   createProductSchema,
   createVariantSchema,
   getProductParamsSchema,
+  updateProductSchema,
   listProductsQuerySchema,
 } from './products.schema.js';
 
@@ -42,4 +43,12 @@ productsRouter.post(
   requireRole('ADMIN'),
   validate(createVariantSchema),
   productsController.addVariant
+);
+
+productsRouter.patch(
+  '/:id',
+  authMiddleware,
+  requireRole('ADMIN'),
+  validate(updateProductSchema),
+  productsController.update
 );

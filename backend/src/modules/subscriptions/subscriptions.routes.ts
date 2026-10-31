@@ -8,6 +8,7 @@ import {
   transitionSubscriptionSchema,
   subscriptionQuerySchema,
   subscriptionParamsSchema,
+  myQuerySchema,
 } from './subscriptions.schema.js';
 import {
   createSubscriptionHandler,
@@ -28,6 +29,7 @@ subscriptionsRouter.get(
   '/me',
   authMiddleware,
   requireRole('CUSTOMER'),
+  validate(myQuerySchema),
   getMySubscriptionsHandler
 );
 
@@ -71,7 +73,7 @@ subscriptionsRouter.patch(
 subscriptionsRouter.post(
   '/:id/transition',
   authMiddleware,
-  requireRole('ADMIN', 'STAFF'),
+  requireRole('ADMIN', 'STAFF', 'CUSTOMER'),
   validate(transitionSubscriptionSchema),
   transitionSubscriptionHandler
 );
@@ -109,6 +111,7 @@ meSubscriptionsRouter.get(
   '/',
   authMiddleware,
   requireRole('CUSTOMER'),
+  validate(myQuerySchema),
   getMySubscriptionsHandler
 );
 

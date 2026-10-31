@@ -1,16 +1,7 @@
 import { z } from 'zod';
+import { taxBody } from '@brightloop/shared';
 
-export const createTaxSchema = z.object({
-  body: z.object({
-    name: z.string().trim().min(1, 'Tax name is required'),
-    rateBps: z
-      .number()
-      .int()
-      .min(0, 'Tax rate in basis points must be at least 0')
-      .max(10000, 'Tax rate in basis points cannot exceed 10000 (100%)'),
-    active: z.boolean().optional().default(true),
-  }).strict(),
-});
+export const createTaxSchema = z.object({ body: taxBody });
 
 export const listTaxesQuerySchema = z.object({
   query: z.object({

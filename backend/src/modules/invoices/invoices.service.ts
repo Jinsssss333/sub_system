@@ -30,13 +30,38 @@ async function lockDiscounts(tx: Prisma.TransactionClient, discountIds: string[]
   await tx.$queryRaw(Prisma.sql`SELECT id FROM "Discount" WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`);
 }
 
-export async function generateInvoice(subscriptionId: string, requestedPeriod?: Date | string, today = new Date()) {
+const invoiceInclude = { lines: true, customer: true, payments: true } satisfies Prisma.InvoiceInclude;
+type InvoiceWithRelations = Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>;
+
+export type GenerateInvoiceResult =
+  | { status: 'created'; invoice: InvoiceWithRelations }
+  | { status: 'existing'; invoice: InvoiceWithRelations }
+  | { status: 'closed'; invoice: null };
+
+/**
+ * Generates the invoice for one subscription period inside a single transaction.
+ * Idempotent: the (subscriptionId, periodStart) unique constraint plus the subscription
+ * row lock guarantee at most one invoice per period, however many times it is called.
+ */
+export async function generateInvoice(subscriptionId: string, requestedPeriod?: Date | string, today = new Date()): Promise<GenerateInvoiceResult> {
+  try {
+    return await generateInvoiceTx(subscriptionId, requestedPeriod, today);
+  } catch (error) {
+    // A concurrent transaction won the unique constraint race: return its invoice.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return generateInvoiceTx(subscriptionId, requestedPeriod, today);
+    }
+    throw error;
+  }
+}
+
+async function generateInvoiceTx(subscriptionId: string, requestedPeriod: Date | string | undefined, today: Date): Promise<GenerateInvoiceResult> {
   const billingDate = dayStart(today);
   const targetPeriodStart = requestedPeriod
     ? dayStart(typeof requestedPeriod === 'string' ? new Date(requestedPeriod) : requestedPeriod)
     : null;
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx): Promise<GenerateInvoiceResult> => {
     await lockSubscription(tx, subscriptionId);
     const subscription = await tx.subscription.findUnique({
       where: { id: subscriptionId },
@@ -56,10 +81,17 @@ export async function generateInvoice(subscriptionId: string, requestedPeriod?: 
 
     const existing = await tx.invoice.findUnique({
       where: { subscriptionId_periodStart: { subscriptionId, periodStart: effectivePeriodStart } },
-      include: { lines: true, customer: true, payments: true },
+      include: invoiceInclude,
     });
     if (existing) {
-      return existing;
+      // Repair a cursor left pointing at an already-billed period so billing can move on.
+      if (subscription.nextInvoiceDate && dayStart(subscription.nextInvoiceDate).getTime() === effectivePeriodStart.getTime()) {
+        await tx.subscription.update({
+          where: { id: subscriptionId },
+          data: { nextInvoiceDate: addPeriod(effectivePeriodStart, subscription.plan.billingPeriod, subscription.startDate) },
+        });
+      }
+      return { status: 'existing', invoice: existing };
     }
 
     // 2. Lifecycle and state checks
@@ -90,7 +122,9 @@ export async function generateInvoice(subscriptionId: string, requestedPeriod?: 
     const effectiveExpiryDate = subscription.expiryDate ?? subscription.plan.endDate;
     if (effectiveExpiryDate && nextInvoiceDateDay > dayStart(effectiveExpiryDate)) {
       if (subscription.plan.autoClose) {
-        await tx.subscription.update({ where: { id: subscriptionId }, data: { status: 'CLOSED' } });
+        // Committed (not thrown) so the close is not rolled back.
+        await tx.subscription.update({ where: { id: subscriptionId }, data: { status: 'CLOSED', nextInvoiceDate: null } });
+        return { status: 'closed', invoice: null };
       }
       throw new FinanceError('Subscription has reached its expiry date and cannot be billed', 409, 'SUBSCRIPTION_EXPIRED');
     }
@@ -101,7 +135,7 @@ export async function generateInvoice(subscriptionId: string, requestedPeriod?: 
 
     // 4. Calculate pricing for product lines
     const productIds = subscription.lines.map((line) => line.productId);
-    const candidates = await tx.discount.findMany({
+    const candidateIds = await tx.discount.findMany({
       where: {
         startDate: { lte: periodStart },
         endDate: { gte: periodStart },
@@ -110,9 +144,11 @@ export async function generateInvoice(subscriptionId: string, requestedPeriod?: 
           { scope: DiscountScope.SUBSCRIPTION, subscriptions: { some: { subscriptionId } } },
         ],
       },
-      include: { products: true },
+      select: { id: true },
     });
-    await lockDiscounts(tx, candidates.map((discount) => discount.id));
+    // Lock discount rows in id order, then re-read usage so the limit check sees committed values.
+    await lockDiscounts(tx, candidateIds.map((discount) => discount.id));
+    const candidates = await tx.discount.findMany({ where: { id: { in: candidateIds.map((d) => d.id) } }, include: { products: true }, orderBy: { id: 'asc' } });
     const discounts = candidates.filter((discount) => discount.usageLimit === null || discount.timesUsed < discount.usageLimit);
 
     const pricing = subscription.lines.length > 0
@@ -137,7 +173,9 @@ export async function generateInvoice(subscriptionId: string, requestedPeriod?: 
       : { lines: [], subtotal: 0, discountTotal: 0, taxTotal: 0, total: 0, appliedDiscountIds: [] };
 
     for (const discountId of pricing.appliedDiscountIds) {
-      await tx.discount.update({ where: { id: discountId }, data: { timesUsed: { increment: 1 } } });
+      // Atomic claim: the conditional update only succeeds while usage is below the limit.
+      const claimed = await tx.$executeRaw`UPDATE "Discount" SET "timesUsed" = "timesUsed" + 1 WHERE id = ${discountId} AND ("usageLimit" IS NULL OR "timesUsed" < "usageLimit")`;
+      if (claimed !== 1) throw new FinanceError('Discount usage limit reached during billing', 409, 'DISCOUNT_EXHAUSTED');
     }
 
     // 5. Add recurring plan base fee line item (DECISIONS.md & README_PERSON_3)
@@ -202,34 +240,35 @@ export async function generateInvoice(subscriptionId: string, requestedPeriod?: 
         dueDate: new Date(billingDate.getTime() + subscription.paymentTermDays * 86_400_000),
         lines: { create: invoiceLinesData },
       },
-      include: { lines: true, customer: true, payments: true },
+      include: invoiceInclude,
     });
 
     await tx.subscription.update({ where: { id: subscriptionId }, data: { nextInvoiceDate } });
-    return invoice;
+    return { status: 'created', invoice };
   });
 }
 
+/** DRAFT → CONFIRMED (or PAID when the total is zero). Compare-and-set prevents double confirmation. */
 export async function confirmInvoice(invoiceId: string) {
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
   if (invoice.status !== 'DRAFT') throw new FinanceError('Only draft invoices can be confirmed', 409, 'INVALID_INVOICE_STATE');
-  return prisma.invoice.update({
-    where: { id: invoiceId },
+  const result = await prisma.invoice.updateMany({
+    where: { id: invoiceId, status: 'DRAFT' },
     data: { status: invoice.total === 0 ? 'PAID' : 'CONFIRMED' },
-    include: { lines: true, customer: true, payments: true },
   });
+  if (result.count !== 1) throw new FinanceError('Invoice changed concurrently; reload and try again', 409, 'CONCURRENT_UPDATE');
+  return prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: invoiceInclude });
 }
 
+/** Cancel an unpaid DRAFT/CONFIRMED invoice. The billed period stays recorded, so it is never re-billed. */
 export async function cancelInvoice(invoiceId: string) {
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new FinanceError('Invoice not found', 404, 'INVOICE_NOT_FOUND');
-  if (invoice.amountPaid !== 0 || !['DRAFT', 'CONFIRMED'].includes(invoice.status)) {
-    throw new FinanceError('Only unpaid draft or confirmed invoices can be cancelled', 409, 'INVALID_INVOICE_STATE');
-  }
-  return prisma.invoice.update({
-    where: { id: invoiceId },
+  const result = await prisma.invoice.updateMany({
+    where: { id: invoiceId, amountPaid: 0, status: { in: ['DRAFT', 'CONFIRMED'] } },
     data: { status: 'CANCELLED' },
-    include: { lines: true, customer: true, payments: true },
   });
+  if (result.count !== 1) throw new FinanceError('Only unpaid draft or confirmed invoices can be cancelled', 409, 'INVALID_INVOICE_STATE');
+  return prisma.invoice.findUniqueOrThrow({ where: { id: invoiceId }, include: invoiceInclude });
 }

@@ -1,5 +1,9 @@
+import { Prisma } from '@prisma/client';
+import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { requestPasswordReset } from '../auth/auth.service.js';
 import { prisma } from '../../config/db.js';
+import { ApiError } from '../../utils/errors.js';
 import { AuthUser } from '../../middleware/auth.js';
 import { CreateCustomerInput, ListCustomersQuery } from './customers.schema.js';
 
@@ -8,7 +12,7 @@ export async function listCustomers(query: ListCustomersQuery) {
   const skip = (page - 1) * pageSize;
   const take = Math.min(pageSize, 100);
 
-  const where: any = {};
+  const where: Prisma.CustomerWhereInput = {};
   if (q && q.trim().length > 0) {
     const search = q.trim();
     where.OR = [
@@ -72,13 +76,12 @@ export async function createCustomer(input: CreateCustomerInput) {
   });
 
   if (existing) {
-    const error: any = new Error('A user with this email already exists');
-    error.statusCode = 409;
-    error.code = 'CONFLICT';
-    throw error;
+    throw new ApiError(409, 'CONFLICT', 'A user with this email already exists');
   }
 
-  const passwordHash = await bcrypt.hash(input.password, 10);
+  // No shared default password: without an explicit password the customer gets an
+  // unguessable one and a reset link (via Mailpit) to choose their own.
+  const passwordHash = await bcrypt.hash(input.password ?? randomBytes(24).toString('base64url'), 10);
 
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -113,19 +116,14 @@ export async function createCustomer(input: CreateCustomerInput) {
     };
   });
 
+  if (!input.password) await requestPasswordReset({ email: normalizedEmail });
   return result;
 }
 
 export async function getCustomerById(id: string, requestingUser: AuthUser) {
-  if (requestingUser.role === 'CUSTOMER' && requestingUser.customerId !== id) {
-    const error: any = new Error('Customer not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
-  }
-
-  const customer = await prisma.customer.findUnique({
-    where: { id },
+  // Ownership is part of the query: a customer can only ever match their own row.
+  const customer = await prisma.customer.findFirst({
+    where: { AND: [{ id }, requestingUser.role === 'CUSTOMER' ? { id: requestingUser.customerId ?? '__none__' } : {}] },
     include: {
       user: {
         select: {
@@ -140,10 +138,7 @@ export async function getCustomerById(id: string, requestingUser: AuthUser) {
   });
 
   if (!customer) {
-    const error: any = new Error('Customer not found');
-    error.statusCode = 404;
-    error.code = 'NOT_FOUND';
-    throw error;
+    throw new ApiError(404, 'NOT_FOUND', 'Customer not found');
   }
 
   return {

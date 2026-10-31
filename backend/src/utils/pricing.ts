@@ -1,10 +1,14 @@
-/** Pricing math uses integer paise and basis points only. */
+/**
+ * Pricing math pure utilities (Money in integer Paise, Taxes in Basis Points)
+ * All division is integer division to guarantee zero floating-point errors.
+ */
+
 export type DiscountScope = 'PRODUCT' | 'SUBSCRIPTION';
 export type DiscountType = 'FIXED' | 'PERCENT';
 
 export interface PricingLineInput {
   id: string;
-  productId: string;
+  productId?: string | null;
   quantity: number;
   unitPrice: number;
   taxRateBps: number;
@@ -49,7 +53,7 @@ function asDatabaseInt(value: bigint, field: string): number {
   return Number(value);
 }
 
-/** Round a non-negative fraction to the nearest paise, with halves rounded up. */
+/** Round a non-negative fraction to the nearest paise, with halves rounded up: (n + d/2) / d */
 export function roundHalfUp(numerator: bigint, denominator: bigint): bigint {
   if (numerator < 0n || denominator <= 0n) throw new Error('roundHalfUp requires non-negative values');
   return (numerator + denominator / 2n) / denominator;
@@ -60,10 +64,12 @@ export function calculateLineBaseAmount(quantity: number, unitPrice: number): nu
 }
 
 export function calculatePercentDiscount(amount: number, rateBps: number): number {
+  // rateBps: 1000 = 10%
   return asDatabaseInt(roundHalfUp(asBigInt(amount, 'amount') * asBigInt(rateBps, 'rateBps'), 10_000n), 'discount');
 }
 
 export function calculateTaxAmount(discountedAmount: number, rateBps: number): number {
+  // Half-up integer rounding: (amount * rateBps + 5000) / 10000
   return asDatabaseInt(roundHalfUp(asBigInt(discountedAmount, 'discountedAmount') * asBigInt(rateBps, 'rateBps'), 10_000n), 'tax');
 }
 
@@ -76,7 +82,7 @@ function allocateProportionally(balances: bigint[], requested: bigint): bigint[]
     return { index, amount: numerator / total, remainder: numerator % total };
   });
   let remainder = discount - allocations.reduce((sum, item) => sum + item.amount, 0n);
-  allocations.sort((left, right) => left.remainder === right.remainder ? left.index - right.index : (left.remainder > right.remainder ? -1 : 1));
+  allocations.sort((left, right) => (left.remainder === right.remainder ? left.index - right.index : left.remainder > right.remainder ? -1 : 1));
   for (const allocation of allocations) {
     if (remainder === 0n) break;
     if (allocation.amount < balances[allocation.index]) {
@@ -107,9 +113,11 @@ export function calculateInvoicePricing(inputLines: PricingLineInput[], inputDis
     return { ...line, gross: quantity * unitPrice, discount: 0n, taxRateBps };
   });
   const appliedDiscountIds: string[] = [];
-  const orderedDiscounts = [...inputDiscounts].sort((left, right) => left.scope !== right.scope ? (left.scope === 'PRODUCT' ? -1 : 1) : left.id.localeCompare(right.id));
+  const orderedDiscounts = [...inputDiscounts].sort((left, right) => (left.scope !== right.scope ? (left.scope === 'PRODUCT' ? -1 : 1) : left.id.localeCompare(right.id)));
   for (const discount of orderedDiscounts) {
-    const eligibleIndexes = lines.map((line, index) => ({ line, index })).filter(({ line }) => discount.scope === 'SUBSCRIPTION' || discount.productIds?.includes(line.productId));
+    const eligibleIndexes = lines
+      .map((line, index) => ({ line, index }))
+      .filter(({ line }) => discount.scope === 'SUBSCRIPTION' || (line.productId != null && discount.productIds?.includes(line.productId)));
     if (eligibleIndexes.length === 0) continue;
     const balances = eligibleIndexes.map(({ line }) => line.gross - line.discount);
     const eligibleTotal = balances.reduce((sum, balance) => sum + balance, 0n);
@@ -119,16 +127,36 @@ export function calculateInvoicePricing(inputLines: PricingLineInput[], inputDis
     if (discount.minQuantity != null && eligibleQuantity < asBigInt(discount.minQuantity, 'minimum quantity')) continue;
     const allocations = allocateProportionally(balances, discountValue(discount.type, discount.value, eligibleTotal));
     if (allocations.every((amount) => amount === 0n)) continue;
-    eligibleIndexes.forEach(({ index }, allocationIndex) => { lines[index].discount += allocations[allocationIndex]; });
+    eligibleIndexes.forEach(({ index }, allocationIndex) => {
+      lines[index].discount += allocations[allocationIndex];
+    });
     appliedDiscountIds.push(discount.id);
   }
   const pricedLines: PricedLine[] = lines.map((line) => {
     const taxableAmount = line.gross - line.discount;
     const taxAmount = roundHalfUp(taxableAmount * line.taxRateBps, 10_000n);
-    return { id: line.id, productId: line.productId, quantity: line.quantity, unitPrice: line.unitPrice, taxRateBps: Number(line.taxRateBps), gross: asDatabaseInt(line.gross, 'line gross'), discountAmount: asDatabaseInt(line.discount, 'line discount'), taxableAmount: asDatabaseInt(taxableAmount, 'line taxable amount'), taxAmount: asDatabaseInt(taxAmount, 'line tax'), amount: asDatabaseInt(taxableAmount + taxAmount, 'line total') };
+    return {
+      id: line.id,
+      productId: line.productId,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      taxRateBps: Number(line.taxRateBps),
+      gross: asDatabaseInt(line.gross, 'line gross'),
+      discountAmount: asDatabaseInt(line.discount, 'line discount'),
+      taxableAmount: asDatabaseInt(taxableAmount, 'line taxable amount'),
+      taxAmount: asDatabaseInt(taxAmount, 'line tax'),
+      amount: asDatabaseInt(taxableAmount + taxAmount, 'line total'),
+    };
   });
   const subtotal = pricedLines.reduce((sum, line) => sum + BigInt(line.gross), 0n);
   const discountTotal = pricedLines.reduce((sum, line) => sum + BigInt(line.discountAmount), 0n);
   const taxTotal = pricedLines.reduce((sum, line) => sum + BigInt(line.taxAmount), 0n);
-  return { lines: pricedLines, subtotal: asDatabaseInt(subtotal, 'invoice subtotal'), discountTotal: asDatabaseInt(discountTotal, 'invoice discount total'), taxTotal: asDatabaseInt(taxTotal, 'invoice tax total'), total: asDatabaseInt(subtotal - discountTotal + taxTotal, 'invoice total'), appliedDiscountIds };
+  return {
+    lines: pricedLines,
+    subtotal: asDatabaseInt(subtotal, 'invoice subtotal'),
+    discountTotal: asDatabaseInt(discountTotal, 'invoice discount total'),
+    taxTotal: asDatabaseInt(taxTotal, 'invoice tax total'),
+    total: asDatabaseInt(subtotal - discountTotal + taxTotal, 'invoice total'),
+    appliedDiscountIds,
+  };
 }

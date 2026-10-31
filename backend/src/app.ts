@@ -19,6 +19,7 @@ import { subscriptionsRouter } from './modules/subscriptions/subscriptions.route
 import { invoicesRouter } from './modules/invoices/invoices.routes.js';
 import { paymentsRouter } from './modules/payments/payments.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
+import { adminBillingRouter } from './jobs/billing.job.js';
 
 export const app = express();
 
@@ -26,7 +27,7 @@ app.use(cors());
 app.use(express.json());
 
 // Public health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     system: 'Brightloop Subscription Platform',
@@ -49,8 +50,9 @@ app.use('/api/subscriptions', subscriptionsRouter);
 
 // Person 3: Billing & Reports routes
 app.use('/api/invoices', invoicesRouter);
-app.use('/api/payments', paymentsRouter);
+app.use('/api', paymentsRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/admin', adminBillingRouter);
 
 // Centralized error handling
 app.use(errorHandler);

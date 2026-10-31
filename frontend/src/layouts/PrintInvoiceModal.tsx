@@ -15,9 +15,15 @@ export function PrintInvoiceModal({ invoice, onClose }: PrintInvoiceModalProps) 
   const balanceDue = Math.max(0, invoice.total - invoice.amountPaid);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div 
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
+    >
       {/* Modal Container */}
-      <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col my-8">
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col my-8 cursor-default"
+      >
         
         {/* Modal Controls (Hidden in Print) */}
         <div className="no-print bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">

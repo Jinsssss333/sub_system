@@ -31,4 +31,25 @@ describe('invoice pricing', () => {
     const result = calculateInvoicePricing([{ id: 'a', productId: 'a', quantity: 1, unitPrice: 1, taxRateBps: 5_000 }], []);
     expect(result.taxTotal).toBe(1);
   });
+
+  it('matches the exact Person 3 README hackathon example calculation', () => {
+    // Product ₹1,000 (100000 paise) + variant ₹560 (56000 paise) = ₹1,560 (156000 paise)
+    // Quantity 2 = ₹3,120 = 312000 paise
+    // Plan base fee = ₹990 = 99000 paise
+    // 18% tax on product line (1800 bps) = 312000 * 1800 / 10000 = 56160 paise (₹561.60)
+    // Subtotal = 312000 + 99000 = 411000 paise
+    // Total = 411000 + 56160 = 467160 paise (₹4,671.60)
+    const productResult = calculateInvoicePricing(
+      [{ id: 'line-1', productId: 'prod-odoo', quantity: 2, unitPrice: 156_000, taxRateBps: 1_800 }],
+      []
+    );
+    const planBaseFee = 99_000;
+    const subtotal = productResult.subtotal + planBaseFee;
+    const total = subtotal - productResult.discountTotal + productResult.taxTotal;
+
+    expect(productResult.lines[0].gross).toBe(312_000);
+    expect(productResult.taxTotal).toBe(56_160);
+    expect(subtotal).toBe(411_000);
+    expect(total).toBe(467_160);
+  });
 });

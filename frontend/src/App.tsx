@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Building2, 
   Package, 
@@ -8,7 +8,8 @@ import {
   Receipt,
   Layers,
   Tag,
-  Sparkles
+  Sparkles,
+  Wifi
 } from 'lucide-react';
 
 import { ProductsPage } from './pages/admin/ProductsPage';
@@ -18,14 +19,35 @@ import { SubscriptionsPage } from './pages/staff/SubscriptionsPage';
 import { InvoicesPage } from './pages/staff/InvoicesPage';
 import { CustomerPortal } from './pages/customer/CustomerPortal';
 import { FinanceDashboard } from './pages/finance/FinanceDashboard';
+import { authenticateRole } from './api/client';
 
 export function App() {
   const [currentRole, setCurrentRole] = useState<'ADMIN' | 'STAFF' | 'CUSTOMER'>('ADMIN');
   const [activeTab, setActiveTab] = useState<string>('products');
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
+
+  // Check health and sync auth
+  useEffect(() => {
+    async function checkHealthAndAuth() {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          setIsBackendConnected(true);
+          await authenticateRole(currentRole);
+        } else {
+          setIsBackendConnected(false);
+        }
+      } catch {
+        setIsBackendConnected(false);
+      }
+    }
+    checkHealthAndAuth();
+  }, [currentRole]);
 
   // Handle Role Switching and reset to default page of that role
   const handleRoleSwitch = (role: 'ADMIN' | 'STAFF' | 'CUSTOMER') => {
     setCurrentRole(role);
+    authenticateRole(role);
     if (role === 'ADMIN') setActiveTab('products');
     if (role === 'STAFF') setActiveTab('subscriptions');
     if (role === 'CUSTOMER') setActiveTab('portal');
@@ -181,6 +203,21 @@ export function App() {
               <span className="font-bold text-xs bg-slate-100 text-slate-800 px-2.5 py-1 rounded-lg border border-slate-200">
                 {currentRole} VIEW
               </span>
+            </div>
+
+            {/* Backend Connectivity Status Badge */}
+            <div className="hidden sm:flex items-center text-[11px] font-medium">
+              {isBackendConnected ? (
+                <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full">
+                  <Wifi className="w-3 h-3 text-emerald-600" />
+                  Backend API Live
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-slate-600 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-full" title="UI running in robust offline demo mode with complete seed dataset">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Resilient Offline Mode
+                </span>
+              )}
             </div>
           </div>
 

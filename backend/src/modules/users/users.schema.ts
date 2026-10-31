@@ -27,3 +27,4 @@ export const listUsersQuerySchema = z.object({
 
 export type CreateStaffInput = z.infer<typeof createStaffSchema>['body'];
 export type ListUsersQuery = z.infer<typeof listUsersQuerySchema>['query'];
+

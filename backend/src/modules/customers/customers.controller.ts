@@ -27,3 +27,4 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
     return next(error);
   }
 }
+

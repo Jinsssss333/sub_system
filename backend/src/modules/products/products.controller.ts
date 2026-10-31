@@ -36,3 +36,4 @@ export async function addVariant(req: Request, res: Response, next: NextFunction
     return next(error);
   }
 }
+

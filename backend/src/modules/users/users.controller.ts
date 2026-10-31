@@ -18,3 +18,4 @@ export async function createStaff(req: Request, res: Response, next: NextFunctio
     return next(error);
   }
 }
+

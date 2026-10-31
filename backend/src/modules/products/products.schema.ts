@@ -43,3 +43,4 @@ export const getProductParamsSchema = z.object({
 export type CreateProductInput = z.infer<typeof createProductSchema>['body'];
 export type CreateVariantInput = z.infer<typeof createVariantSchema>['body'];
 export type ListProductsQuery = z.infer<typeof listProductsQuerySchema>['query'];
+

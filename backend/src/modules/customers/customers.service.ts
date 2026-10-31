@@ -160,3 +160,4 @@ export async function getCustomerById(id: string, requestingUser: AuthUser) {
     },
   };
 }
+

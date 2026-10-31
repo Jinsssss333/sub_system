@@ -32,3 +32,4 @@ export const getTaxParamsSchema = z.object({
 
 export type CreateTaxInput = z.infer<typeof createTaxSchema>['body'];
 export type ListTaxesQuery = z.infer<typeof listTaxesQuerySchema>['query'];
+

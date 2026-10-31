@@ -61,3 +61,4 @@ export const getPlanParamsSchema = z.object({
 
 export type CreatePlanInput = z.infer<typeof createPlanSchema>['body'];
 export type ListPlansQuery = z.infer<typeof listPlansQuerySchema>['query'];
+

@@ -428,3 +428,4 @@ main().catch((err) => {
   console.error('\n❌ VERIFICATION TEST RUN FAILED:', err);
   process.exit(1);
 });
+

@@ -133,14 +133,24 @@ export function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 1 & 2 (Backend Team)</div>
-                  <p className="text-slate-600 text-xs mb-2">Branches: <code className="text-indigo-600">feature/db-auth</code> & <code className="text-indigo-600">feature/billing-engine</code></p>
-                  <p className="text-slate-500 text-xs">Run <code className="bg-white px-1 border rounded">docker compose up -d</code> then migrate & seed DB.</p>
+                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 1: Identity & Catalog</div>
+                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/identity-catalog</code></p>
+                  <p className="text-slate-500 text-xs">Auth, JWT, RBAC, Users, Products (+₹560 Odoo variant), Plans, Taxes, Discounts.</p>
                 </div>
                 <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🎨 Person 3 & 4 (Frontend Team)</div>
-                  <p className="text-slate-600 text-xs mb-2">Branches: <code className="text-indigo-600">feature/admin-frontend</code> & <code className="text-indigo-600">feature/portal-and-dashboard</code></p>
-                  <p className="text-slate-500 text-xs">Build out Admin Catalog/Subscriptions and Customer Portal/Finance Dashboard.</p>
+                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 2: Subscriptions Lifecycle</div>
+                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/subscriptions</code></p>
+                  <p className="text-slate-500 text-xs">Templates, Quotes, Subscriptions State Machine (Draft $\rightarrow$ Closed), Pause/Renew, Date math.</p>
+                </div>
+                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 3: Billing & Finance Engine</div>
+                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/billing-engine</code></p>
+                  <p className="text-slate-500 text-xs">Pricing math, idempotent invoice generator, payment recording, scheduler & SQL aggregates.</p>
+                </div>
+                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                  <div className="font-semibold text-slate-800 mb-1">🎨 Person 4: Frontend & Integration</div>
+                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/frontend-integration</code></p>
+                  <p className="text-slate-500 text-xs">Complete UI across Admin, Staff, and Customer Portal, TanStack Query, and Live Pitch Lead.</p>
                 </div>
               </div>
             </div>

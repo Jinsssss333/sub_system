@@ -10,7 +10,10 @@
     "prisma:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "billing:run": "tsx src/jobs/billing.job.ts"
+    "billing:run": "tsx src/jobs/billing.job.ts",
+    "test": "tsx tests/verify_person_1.ts",
+    "test:person1": "tsx tests/verify_person_1.ts",
+    "test:person2": "tsx tests/verify_person_2.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0",

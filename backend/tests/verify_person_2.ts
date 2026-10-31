@@ -83,6 +83,9 @@ async function main() {
   // --- PART 2: Database Setup & Seed Fixtures ---
   console.log('\n▶ TEST 2: Preparing Test Database Fixtures');
   // Clean test tables
+  await prisma.payment.deleteMany({});
+  await prisma.invoiceLine.deleteMany({});
+  await prisma.invoice.deleteMany({});
   await prisma.subscriptionDiscount.deleteMany({});
   await prisma.subscriptionLine.deleteMany({});
   await prisma.subscription.deleteMany({});

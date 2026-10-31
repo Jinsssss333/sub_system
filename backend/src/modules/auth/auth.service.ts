@@ -119,5 +119,13 @@ export async function getCurrentUser(userId: string) {
     email: user.email,
     role: user.role,
     customerId: user.customer?.id,
+    customer: user.customer
+      ? {
+          id: user.customer.id,
+          companyName: user.customer.companyName,
+          phone: user.customer.phone,
+          address: user.customer.address,
+        }
+      : null,
   };
 }

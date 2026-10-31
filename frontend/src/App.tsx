@@ -1,165 +1,89 @@
 import { useState } from 'react';
-import { 
-  Building2, 
-  Users, 
-  Package, 
-  CreditCard, 
-  FileText, 
-  BarChart3, 
-  ShieldCheck, 
-  CheckCircle2,
-  Receipt
-} from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { BrowserRouter, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { BarChart3, Building2, CreditCard, FileText, LoaderCircle, Printer, Receipt, ShieldCheck, Users } from 'lucide-react';
+import { ApiError, apiRequest } from './api/client';
 
-export function App() {
-  const [currentRole, setCurrentRole] = useState<'ADMIN' | 'STAFF' | 'CUSTOMER'>('ADMIN');
+type Role = 'ADMIN' | 'STAFF' | 'CUSTOMER';
+type ApiEnvelope<T> = { data: T; meta?: { page: number; pageSize: number; total: number } };
+type Subscription = { id: string; number: string; status: string; startDate: string; pausedAt?: string | null; nextInvoiceDate?: string | null; plan?: { name: string; billingPeriod: string } };
+type Invoice = {
+  id: string; number: string; status: string; total: number; amountPaid: number; issueDate: string; dueDate: string;
+  customerName?: string | null; customerAddress?: string | null; customer?: { companyName?: string | null; user?: { name: string } };
+  lines?: Array<{ id: string; description?: string | null; quantity: number; unitPrice: number; discountAmount: number; taxAmount: number; total: number }>;
+};
+type Summary = { activeSubscriptions: number; revenueCollected: number; outstanding: number; overdueCount: number };
 
-  return (
-    <div className="flex h-screen bg-slate-100 font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-          <div className="bg-primary-600 p-2 rounded-lg">
-            <Building2 className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-sm tracking-wide">BRIGHTLOOP</h1>
-            <p className="text-xs text-slate-400">Subscription Engine</p>
-          </div>
-        </div>
+const formatINR = (paise: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(paise / 100);
+const formatDate = (date?: string | null) => date ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(date)) : '—';
+const remaining = (invoice: Invoice) => Math.max(0, invoice.total - invoice.amountPaid);
 
-        <nav className="flex-1 p-4 space-y-1">
-          {currentRole === 'ADMIN' && (
-            <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Admin Panel</div>
-              <a href="#catalog" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <Package className="w-4 h-4" /> Products & Plans
-              </a>
-              <a href="#users" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Users className="w-4 h-4" /> Staff & Users
-              </a>
-              <a href="#finance" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <BarChart3 className="w-4 h-4" /> Finance Dashboard
-              </a>
-            </>
-          )}
-
-          {currentRole === 'STAFF' && (
-            <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Operations</div>
-              <a href="#subscriptions" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <FileText className="w-4 h-4" /> Subscriptions
-              </a>
-              <a href="#invoices" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Receipt className="w-4 h-4" /> Invoices & Billing
-              </a>
-              <a href="#payments" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <CreditCard className="w-4 h-4" /> Payments
-              </a>
-            </>
-          )}
-
-          {currentRole === 'CUSTOMER' && (
-            <>
-              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">Customer Portal</div>
-              <a href="#my-subs" className="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium">
-                <FileText className="w-4 h-4" /> My Subscriptions
-              </a>
-              <a href="#my-invoices" className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 text-sm">
-                <Receipt className="w-4 h-4" /> My Invoices
-              </a>
-            </>
-          )}
-        </nav>
-
-        <div className="p-4 border-t border-slate-800 text-xs text-slate-400">
-          Odoo Hackathon 2026 Edition
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Topbar with Demo Role Switcher */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span className="text-sm font-medium text-slate-700">Role View:</span>
-            <span className="font-semibold text-sm bg-slate-100 text-slate-800 px-2 py-0.5 rounded border">
-              {currentRole}
-            </span>
-          </div>
-
-          {/* Quick Role Switcher for Hackathon Judges */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 mr-2 font-medium">Switch View:</span>
-            <button
-              onClick={() => setCurrentRole('ADMIN')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'ADMIN' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => setCurrentRole('STAFF')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'STAFF' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Staff
-            </button>
-            <button
-              onClick={() => setCurrentRole('CUSTOMER')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
-                currentRole === 'CUSTOMER' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              Customer
-            </button>
-          </div>
-        </header>
-
-        {/* Workspace Placeholder */}
-        <main className="flex-1 p-8 overflow-auto">
-          <div className="max-w-5xl mx-auto">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
-              <div className="flex items-center gap-3 text-emerald-600 mb-4">
-                <CheckCircle2 className="w-8 h-8" />
-                <h2 className="text-2xl font-bold text-slate-900">Foundation Ready for 4-Person Sprint</h2>
-              </div>
-              <p className="text-slate-600 mb-6">
-                The core monorepo, Docker PostgreSQL environment, Prisma database schema, and frontend layout are now set up on the <code className="bg-slate-100 px-2 py-1 rounded text-primary-600 font-mono text-sm">dev</code> branch.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 1: Identity & Catalog</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/identity-catalog</code></p>
-                  <p className="text-slate-500 text-xs">Auth, JWT, RBAC, Users, Products (+₹560 Odoo variant), Plans, Taxes, Discounts.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 2: Subscriptions Lifecycle</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/subscriptions</code></p>
-                  <p className="text-slate-500 text-xs">Templates, Quotes, Subscriptions State Machine (Draft → Closed), Pause/Renew, Date math.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🧑‍💻 Person 3: Billing & Finance Engine</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/billing-engine</code></p>
-                  <p className="text-slate-500 text-xs">Pricing math, idempotent invoice generator, payment recording, scheduler & SQL aggregates.</p>
-                </div>
-                <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-                  <div className="font-semibold text-slate-800 mb-1">🎨 Person 4: Frontend & Integration</div>
-                  <p className="text-slate-600 text-xs mb-1">Branch: <code className="text-indigo-600 font-mono">feature/frontend-integration</code></p>
-                  <p className="text-slate-500 text-xs">Complete UI across Admin, Staff, and Customer Portal, TanStack Query, and Live Pitch Lead.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+function Badge({ status }: { status: string }) {
+  const colours: Record<string, string> = {
+    ACTIVE: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20', PAID: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
+    CONFIRMED: 'bg-amber-50 text-amber-700 ring-amber-600/20', QUOTATION: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+    CANCELLED: 'bg-rose-50 text-rose-700 ring-rose-600/20', OVERDUE: 'bg-rose-50 text-rose-700 ring-rose-600/20',
+  };
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${colours[status] ?? 'bg-slate-100 text-slate-700 ring-slate-500/20'}`}>{status}</span>;
 }
 
-export default App;
+function Loading() { return <div className="flex min-h-48 items-center justify-center rounded-2xl border border-slate-200 bg-white"><LoaderCircle className="h-6 w-6 animate-spin text-indigo-600" /><span className="ml-3 text-sm text-slate-500">Loading live data…</span></div>; }
+function ErrorState({ error }: { error: unknown }) {
+  const message = error instanceof ApiError && error.status === 401 ? 'Sign in is required to view live data. The API token is read securely from this browser when the identity module is ready.' : error instanceof Error ? error.message : 'Unable to load this view.';
+  return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-800"><p className="font-semibold">Live data is unavailable</p><p className="mt-1 text-rose-700">{message}</p></div>;
+}
+function Empty({ title, body }: { title: string; body: string }) { return <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center"><h3 className="font-semibold text-slate-900">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{body}</p></div>; }
+function Header({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) { return <div className="mb-7"><p className="text-xs font-bold uppercase tracking-[0.16em] text-indigo-600">{eyebrow}</p><h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{body}</p></div>; }
 
+function CustomerSubscriptions() {
+  const query = useQuery({ queryKey: ['customer', 'subscriptions'], queryFn: () => apiRequest<ApiEnvelope<Subscription[]>>('/me/subscriptions') });
+  if (query.isLoading) return <Loading />;
+  if (query.isError) return <ErrorState error={query.error} />;
+  const subscriptions = query.data?.data ?? [];
+  return <><Header eyebrow="Customer portal" title="My subscriptions" body="Manage services linked to your account. The API scopes these records to your customer profile." />
+    {subscriptions.length === 0 ? <Empty title="No subscriptions yet" body="Your active and upcoming subscriptions will appear here." /> : <div className="grid gap-4 lg:grid-cols-2">{subscriptions.map((item) => <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between gap-4"><div><p className="font-mono text-xs font-semibold text-indigo-600">{item.number}</p><h2 className="mt-1 font-semibold text-slate-950">{item.plan?.name ?? 'Subscription plan'}</h2><p className="mt-1 text-sm text-slate-500">{item.plan?.billingPeriod ?? 'Recurring'} billing</p></div><Badge status={item.status} /></div><dl className="mt-5 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 text-sm"><div><dt className="text-slate-500">Started</dt><dd className="mt-1 font-medium text-slate-800">{formatDate(item.startDate)}</dd></div><div><dt className="text-slate-500">Next invoice</dt><dd className="mt-1 font-medium text-slate-800">{formatDate(item.nextInvoiceDate)}</dd></div></dl>{item.pausedAt && <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">This subscription is currently paused.</p>}</article>)}</div>}</>;
+}
+
+function CustomerInvoices() {
+  const query = useQuery({ queryKey: ['customer', 'invoices'], queryFn: () => apiRequest<ApiEnvelope<Invoice[]>>('/me/invoices?page=1&pageSize=20') });
+  const navigate = useNavigate();
+  if (query.isLoading) return <Loading />;
+  if (query.isError) return <ErrorState error={query.error} />;
+  const invoices = query.data?.data ?? [];
+  return <><Header eyebrow="Customer portal" title="My invoices" body="Review every invoice and print a clean copy for your accounting records." />
+    {invoices.length === 0 ? <Empty title="No invoices yet" body="Invoices generated from your subscriptions will appear here." /> : <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Invoice</th><th className="px-5 py-3">Issued</th><th className="px-5 py-3">Due</th><th className="px-5 py-3">Total</th><th className="px-5 py-3">Status</th><th className="px-5 py-3"><span className="sr-only">Print</span></th></tr></thead><tbody className="divide-y divide-slate-100">{invoices.map((invoice) => <tr key={invoice.id} className="hover:bg-slate-50"><td className="px-5 py-4 font-mono text-xs font-semibold text-indigo-600">{invoice.number}</td><td className="px-5 py-4 text-slate-600">{formatDate(invoice.issueDate)}</td><td className="px-5 py-4 text-slate-600">{formatDate(invoice.dueDate)}</td><td className="px-5 py-4 font-semibold text-slate-900">{formatINR(invoice.total)}</td><td className="px-5 py-4"><Badge status={invoice.status} /></td><td className="px-5 py-4 text-right"><button onClick={() => navigate(`/invoices/${invoice.id}/print`)} className="inline-flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50"><Printer className="h-4 w-4" />Print</button></td></tr>)}</tbody></table></div></div>}</>;
+}
+
+function FinanceDashboard() {
+  const summary = useQuery({ queryKey: ['reports', 'summary'], queryFn: () => apiRequest<ApiEnvelope<Summary>>('/reports/summary'), refetchInterval: 30_000 });
+  const overdue = useQuery({ queryKey: ['reports', 'overdue'], queryFn: () => apiRequest<ApiEnvelope<Invoice[]>>('/reports/overdue?page=1&pageSize=10'), refetchInterval: 30_000 });
+  if (summary.isLoading || overdue.isLoading) return <Loading />;
+  if (summary.isError) return <ErrorState error={summary.error} />;
+  if (overdue.isError) return <ErrorState error={overdue.error} />;
+  const summaryData = summary.data?.data;
+  const overdueData = overdue.data;
+  if (!summaryData || !overdueData) return <Loading />;
+  const stats = [['Active subscriptions', String(summaryData.activeSubscriptions), 'Live recurring accounts', Users], ['Revenue collected', formatINR(summaryData.revenueCollected), 'Recorded payments', CreditCard], ['Outstanding', formatINR(summaryData.outstanding), 'Awaiting payment', Receipt], ['Overdue invoices', String(summaryData.overdueCount), 'Requires follow-up', FileText]] as const;
+  return <><Header eyebrow="Finance lead" title="Revenue at a glance" body="Server-calculated receivables and revenue totals. Metrics refresh every 30 seconds." /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{stats.map(([label, value, detail, Icon]) => <section key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><p className="text-sm font-medium text-slate-600">{label}</p><Icon className="h-5 w-5 text-indigo-600" /></div><p className="mt-4 text-2xl font-bold tracking-tight text-slate-950">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></section>)}</div><section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><div><h2 className="font-semibold text-slate-950">Overdue invoices</h2><p className="mt-1 text-sm text-slate-500">Oldest balances first, ready for follow-up.</p></div><span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">{overdueData.meta?.total ?? overdueData.data.length} overdue</span></div>{overdueData.data.length === 0 ? <div className="p-8"><Empty title="Nothing overdue" body="All confirmed invoices are within their payment terms." /></div> : <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Customer</th><th className="px-5 py-3">Invoice</th><th className="px-5 py-3">Due date</th><th className="px-5 py-3">Outstanding</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-slate-100">{overdueData.data.map((invoice) => <tr key={invoice.id}><td className="px-5 py-4 font-medium text-slate-900">{invoice.customerName || invoice.customer?.companyName || invoice.customer?.user?.name || 'Customer'}</td><td className="px-5 py-4 font-mono text-xs text-indigo-600">{invoice.number}</td><td className="px-5 py-4 text-slate-600">{formatDate(invoice.dueDate)}</td><td className="px-5 py-4 font-semibold text-slate-900">{formatINR(remaining(invoice))}</td><td className="px-5 py-4"><Badge status="OVERDUE" /></td></tr>)}</tbody></table></div>}</section></>;
+}
+
+function PrintableInvoice() {
+  const { id } = useParams();
+  const query = useQuery({ queryKey: ['invoice', id], enabled: Boolean(id), queryFn: () => apiRequest<ApiEnvelope<Invoice>>(`/invoices/${id}`) });
+  if (query.isLoading) return <Loading />;
+  if (query.isError) return <ErrorState error={query.error} />;
+  const invoice = query.data?.data;
+  if (!invoice) return <Loading />;
+  const customer = invoice.customerName || invoice.customer?.companyName || invoice.customer?.user?.name || 'Customer';
+  return <div className="print-document mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"><div className="no-print mb-7 flex justify-between"><NavLink to="/customer/invoices" className="text-sm font-semibold text-indigo-600 hover:text-indigo-800">← Back to invoices</NavLink><button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700"><Printer className="h-4 w-4" />Print invoice</button></div><header className="flex flex-col justify-between gap-6 border-b border-slate-200 pb-8 sm:flex-row"><div><div className="flex items-center gap-2 text-indigo-600"><Building2 className="h-6 w-6" /><span className="font-bold tracking-wide">BRIGHTLOOP</span></div><p className="mt-3 text-sm text-slate-600">Subscription management, simplified.</p></div><div className="sm:text-right"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Invoice</p><p className="mt-1 font-mono text-xl font-bold text-slate-950">{invoice.number}</p><p className="mt-1 text-sm text-slate-600">Issued {formatDate(invoice.issueDate)}</p></div></header><section className="grid gap-6 py-8 sm:grid-cols-2"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Billed to</p><p className="mt-2 font-semibold text-slate-950">{customer}</p><p className="mt-1 whitespace-pre-line text-sm text-slate-600">{invoice.customerAddress || 'Customer account'}</p></div><div className="sm:text-right"><p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Payment details</p><p className="mt-2 text-sm text-slate-700">Due {formatDate(invoice.dueDate)}</p><div className="mt-2"><Badge status={invoice.status} /></div></div></section><div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead className="border-y border-slate-200 text-xs uppercase tracking-wide text-slate-500"><tr><th className="py-3">Item</th><th className="py-3 text-right">Qty</th><th className="py-3 text-right">Unit price</th><th className="py-3 text-right">Discount</th><th className="py-3 text-right">Tax</th><th className="py-3 text-right">Total</th></tr></thead><tbody>{(invoice.lines ?? []).map((line) => <tr key={line.id} className="border-b border-slate-100"><td className="py-4 font-medium text-slate-900">{line.description || 'Subscription service'}</td><td className="py-4 text-right text-slate-600">{line.quantity}</td><td className="py-4 text-right text-slate-600">{formatINR(line.unitPrice)}</td><td className="py-4 text-right text-slate-600">{formatINR(line.discountAmount)}</td><td className="py-4 text-right text-slate-600">{formatINR(line.taxAmount)}</td><td className="py-4 text-right font-semibold text-slate-900">{formatINR(line.total)}</td></tr>)}</tbody></table></div><div className="ml-auto mt-7 max-w-xs border-t border-slate-200 pt-4 text-sm"><div className="flex justify-between font-bold text-slate-950"><span>Total</span><span>{formatINR(invoice.total)}</span></div><div className="mt-2 flex justify-between text-slate-600"><span>Paid</span><span>{formatINR(invoice.amountPaid)}</span></div><div className="mt-2 flex justify-between font-semibold text-rose-700"><span>Balance due</span><span>{formatINR(remaining(invoice))}</span></div></div><footer className="mt-12 border-t border-slate-200 pt-5 text-xs text-slate-500">This invoice was generated by Brightloop. Discounts are applied before taxes.</footer></div>;
+}
+
+function Workspace({ role, setRole }: { role: Role; setRole: (role: Role) => void }) {
+  const navigate = useNavigate();
+  const links = role === 'CUSTOMER' ? [['/customer/subscriptions', 'My subscriptions', FileText], ['/customer/invoices', 'My invoices', Receipt]] as const : [['/finance', 'Finance dashboard', BarChart3]] as const;
+  const switchRole = (next: Role) => { setRole(next); navigate(next === 'CUSTOMER' ? '/customer/subscriptions' : '/finance'); };
+  return <div className="min-h-screen bg-slate-100 text-slate-900 lg:flex"><aside className="no-print bg-slate-950 text-white lg:fixed lg:inset-y-0 lg:w-64"><div className="flex items-center gap-3 border-b border-slate-800 p-5"><div className="rounded-xl bg-indigo-600 p-2"><Building2 className="h-5 w-5" /></div><div><p className="text-sm font-bold tracking-wide">BRIGHTLOOP</p><p className="text-xs text-slate-400">Subscription Engine</p></div></div><nav className="flex gap-1 overflow-x-auto p-3 lg:block lg:space-y-1">{links.map(([to, label, Icon]) => <NavLink key={to} to={to} className={({ isActive }) => `flex shrink-0 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}><Icon className="h-4 w-4" />{label}</NavLink>)}</nav></aside><div className="flex min-h-screen flex-1 flex-col lg:ml-64"><header className="no-print flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-8"><div className="flex items-center gap-2 text-sm text-slate-600"><ShieldCheck className="h-5 w-5 text-emerald-600" /><span className="hidden sm:inline">Viewing as</span><span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-800">{role}</span></div><div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1">{(['ADMIN', 'STAFF', 'CUSTOMER'] as Role[]).map((candidate) => <button key={candidate} onClick={() => switchRole(candidate)} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold transition sm:px-3 ${role === candidate ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-600 hover:text-slate-950'}`}>{candidate.charAt(0) + candidate.slice(1).toLowerCase()}</button>)}</div></header><main className="mx-auto w-full max-w-7xl flex-1 p-5 sm:p-8"><Routes><Route path="/customer/subscriptions" element={<CustomerSubscriptions />} /><Route path="/customer/invoices" element={<CustomerInvoices />} /><Route path="/invoices/:id/print" element={<PrintableInvoice />} /><Route path="/finance" element={<FinanceDashboard />} /><Route path="*" element={<Empty title="This workspace is ready" body="Choose a section from the navigation to start working with Brightloop." />} /></Routes></main></div></div>;
+}
+
+export function App() { const [role, setRole] = useState<Role>('CUSTOMER'); return <BrowserRouter><Workspace role={role} setRole={setRole} /></BrowserRouter>; }
+export default App;

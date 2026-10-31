@@ -1,4 +1,16 @@
-export async function apiRequest<T = any>(
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string,
+    public readonly fields?: Record<string, string>
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -18,12 +30,17 @@ export async function apiRequest<T = any>(
     headers,
   });
 
-  const data = await response.json();
+  const isJson = response.headers.get('content-type')?.includes('application/json');
+  const data = isJson ? await response.json() : undefined;
 
   if (!response.ok) {
-    throw new Error(data.error?.message || 'API request failed');
+    throw new ApiError(
+      data?.error?.message || `Request failed (${response.status})`,
+      response.status,
+      data?.error?.code,
+      data?.error?.fields
+    );
   }
 
-  return data;
+  return data as T;
 }
-

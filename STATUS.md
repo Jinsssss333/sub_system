@@ -155,7 +155,8 @@ frontend/vite.config.ts
 | 2 Catalog | existing, fixed + built (discounts) | c8bd88e |
 | 3 Subscriptions | existing, fixed | 69c9b59 |
 | 4 Financial core | existing, fixed | 5b87a33 |
-| 5 Collection | existing, fixed + built (print, ledger) | see below |
+| 5 Collection | existing, fixed + built (print, ledger) | 78f6914 |
+| 6 Operations | existing, fixed + built (seed, benchmark) | see below |
 
 ### Gate 0 — Foundation: existing, fixed
 
@@ -266,3 +267,42 @@ $ npx eslint .           -> exit 0, ✖ 27 problems (0 errors, 27 warnings)
 $ npm run build          -> exit 0
 $ npm test -w backend    -> Test Files 10 passed (10) | Tests 73 passed (73)
 ```
+
+### Gate 6 — Operations: existing, fixed; full seed and benchmark built
+
+Existing and kept: node-cron scheduler started by `server.ts`, `/api/reports/summary` (SQL aggregates), `/api/reports/overdue` (paginated).
+Fixed: the admin billing router existed but was **never mounted**; it is now `POST /api/admin/run-billing` (admin only). Scheduler and admin button share a guard so two runs never overlap; invalid `BILLING_CRON` fails fast. Summary adds overdue amount, paused count, subscriptions by status and 6-month collected revenue (all `SUM`/`COUNT`/`GROUP BY` in PostgreSQL); overdue list no longer embeds full user rows.
+Built: rewritten `prisma/seed.ts` (the team's version created a handful of records) — 3 demo logins, 5 named demo customers, catalog with the Odoo Edition variant (+₹560), 2 discounts, 2 templates, a demo story (active subscription with paid/overdue/current invoices, one due today for the live billing run, confirmed/quotation/draft/paused examples) plus 200 bulk customers → **exactly 5,000 subscriptions and 20,000 invoices** (17,603 payments), deterministic, ~8 s. `SEED_SIZE=small` for demo-only data. `scripts/benchmark.ts` (`npm run bench`) measures p50/p95 per endpoint and exits 1 if any p95 ≥ 2,000 ms.
+
+Tests (`test/operations.test.ts`, 5): run-billing admin-only, idempotent second run; overlapping runs blocked; invalid cron rejected; report aggregates exact (revenue ₹150, outstanding ₹450, overdue 1 / ₹150, monthly revenue); full seed counts 5,000/20,000, no duplicate periods, demo login works, every PAID invoice fully paid.
+
+```
+$ npm run db:seed        -> Seed complete in 8.3s: 207 users, 5000 subscriptions, 20000 invoices, 17603 payments.
+$ npm run typecheck      -> exit 0
+$ npx eslint .           -> exit 0, ✖ 26 problems (0 errors, 26 warnings)
+$ npm run build          -> exit 0
+$ npm test -w backend    -> Test Files 11 passed (11) | Tests 78 passed (78)
+$ npm run bench
+```
+
+Benchmark (PostgreSQL 16.15, in-process API over HTTP on localhost, sequential requests):
+
+Dataset: 5000 subscriptions, 20000 invoices, 17603 payments. 50 samples per endpoint after 5 warm-up calls.
+
+| Endpoint | n | p50 (ms) | p95 (ms) | max (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| Subscriptions, page 1 `/subscriptions?page=1&pageSize=20` | 50 | 8.0 | 12.4 | 16.5 |
+| Subscriptions, last page `/subscriptions?page=250&pageSize=20` | 50 | 10.0 | 13.3 | 16.5 |
+| Subscriptions, search `/subscriptions?q=Lotus&page=1&pageSize=20` | 50 | 24.7 | 31.5 | 32.2 |
+| Subscriptions, ACTIVE filter `/subscriptions?status=ACTIVE&page=1&pageSize=20` | 50 | 7.6 | 11.2 | 16.2 |
+| Invoices, page 1 `/invoices?page=1&pageSize=20` | 50 | 4.0 | 6.5 | 13.5 |
+| Invoices, last page `/invoices?page=1000&pageSize=20` | 50 | 11.5 | 13.1 | 19.0 |
+| Invoices, search `/invoices?q=INV-0100&page=1&pageSize=20` | 50 | 18.9 | 22.3 | 24.6 |
+| Payments ledger `/payments?page=1&pageSize=20` | 50 | 3.1 | 5.2 | 6.1 |
+| Customers `/customers?page=1&pageSize=20` | 50 | 2.7 | 7.0 | 7.7 |
+| Finance summary `/reports/summary` | 50 | 8.8 | 12.3 | 13.4 |
+| Overdue invoices `/reports/overdue?page=1&pageSize=20` | 50 | 3.6 | 4.9 | 10.3 |
+| Customer: my subscriptions `/me/subscriptions?page=1&pageSize=20` | 50 | 6.1 | 11.1 | 11.5 |
+| Customer: my invoices `/me/invoices?page=1&pageSize=20` | 50 | 14.0 | 17.1 | 20.6 |
+
+All endpoints within the 2000 ms budget.

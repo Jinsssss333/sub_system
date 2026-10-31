@@ -50,12 +50,34 @@ export async function runBilling(today = new Date()): Promise<BillingRunResult> 
   return result;
 }
 
-export function startBillingScheduler() {
-  if (!cron.validate(env.BILLING_CRON)) throw new Error('BILLING_CRON is invalid');
-  return cron.schedule(env.BILLING_CRON, () => { void runBilling().catch((error) => console.error('Billing job failed', error)); });
+let running: Promise<BillingRunResult> | null = null;
+
+/** Runs billing unless a run is already in progress (scheduler and admin button share this guard). */
+export async function runBillingExclusive(today = new Date()) {
+  if (running) return { alreadyRunning: true as const, result: await running };
+  running = runBilling(today);
+  try {
+    return { alreadyRunning: false as const, result: await running };
+  } finally {
+    running = null;
+  }
+}
+
+export function startBillingScheduler(expression = env.BILLING_CRON) {
+  if (!cron.validate(expression)) throw new Error('BILLING_CRON is not a valid cron expression');
+  return cron.schedule(expression, () => {
+    void runBillingExclusive()
+      .then(({ result }) => console.log(`Scheduled billing: ${result.generated} invoices generated, ${result.failures.length} failures, ${result.durationMs}ms`))
+      .catch((error) => console.error('Billing job failed', error instanceof Error ? error.message : error));
+  });
 }
 
 export const adminBillingRouter = Router();
 adminBillingRouter.post('/run-billing', authMiddleware, requireRole(Role.ADMIN), async (_req, res, next) => {
-  try { res.json(await runBilling()); } catch (error) { next(error); }
+  try {
+    const { alreadyRunning, result } = await runBillingExclusive();
+    res.json({ data: { ...result, alreadyRunning } });
+  } catch (error) {
+    next(error);
+  }
 });

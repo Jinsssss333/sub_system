@@ -11,7 +11,7 @@ export const reportsRouter = Router();
 reportsRouter.get('/summary', authMiddleware, requireRole(Role.ADMIN, Role.STAFF), async (_req, res, next) => {
   try {
     const today = new Date();
-    const [activeSubscriptions, revenue, outstandingResult, overdueCount] = await Promise.all([
+    const [activeSubscriptions, revenue, outstandingResult, overdueCount, overdueAmountResult, monthly, statusCounts, pausedSubscriptions] = await Promise.all([
       prisma.subscription.count({ where: { status: SubscriptionStatus.ACTIVE, pausedAt: null } }),
       prisma.payment.aggregate({ _sum: { amount: true } }),
       prisma.$queryRaw<Array<{ outstanding: bigint }>>`
@@ -25,10 +25,24 @@ reportsRouter.get('/summary', authMiddleware, requireRole(Role.ADMIN, Role.STAFF
           dueDate: { lt: today },
         },
       }),
+      prisma.$queryRaw<Array<{ amount: bigint }>>`
+        SELECT COALESCE(SUM(total - "amountPaid"), 0)::bigint AS amount
+        FROM "Invoice" WHERE status = 'CONFIRMED' AND "dueDate" < ${today}
+      `,
+      prisma.$queryRaw<Array<{ month: string; collected: bigint }>>`
+        SELECT to_char(date_trunc('month', "paidOn"), 'YYYY-MM') AS month, SUM(amount)::bigint AS collected
+        FROM "Payment"
+        WHERE "paidOn" >= date_trunc('month', ${today}::timestamp) - interval '5 months'
+        GROUP BY 1 ORDER BY 1
+      `,
+      prisma.subscription.groupBy({ by: ['status'], _count: { _all: true } }),
+      prisma.subscription.count({ where: { status: SubscriptionStatus.ACTIVE, pausedAt: { not: null } } }),
     ]);
 
     const revenueCollected = revenue._sum.amount ?? 0;
     const outstanding = Number(outstandingResult[0]?.outstanding ?? 0n);
+    const overdueAmount = Number(overdueAmountResult[0]?.amount ?? 0n);
+    const subscriptionsByStatus = Object.fromEntries(statusCounts.map((row) => [row.status, row._count._all]));
 
     res.json({
       data: {
@@ -36,6 +50,10 @@ reportsRouter.get('/summary', authMiddleware, requireRole(Role.ADMIN, Role.STAFF
         revenueCollected,
         outstanding,
         overdueCount,
+        overdueAmount,
+        pausedSubscriptions,
+        subscriptionsByStatus,
+        monthlyRevenue: monthly.map((row) => ({ month: row.month, collected: Number(row.collected) })),
       },
     });
   } catch (error) {
@@ -68,7 +86,7 @@ reportsRouter.get('/overdue', authMiddleware, requireRole(Role.ADMIN, Role.STAFF
         orderBy: { dueDate: 'asc' },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        include: { customer: { include: { user: true } }, lines: true },
+        include: { customer: { select: { id: true, companyName: true, user: { select: { name: true, email: true } } } } },
       }),
     ]);
 

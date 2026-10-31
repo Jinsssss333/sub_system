@@ -108,3 +108,4 @@ frontend/
 
 ## 🎤 What You Explain to Hackathon Judges (Pitch Lead)
 > *"I designed our responsive UI and unified user experience across all three roles. We built a customer self-service portal where customers manage their own accounts with total data isolation, an operational console for staff to manage quotes and log payments, and an executive dashboard where the finance boss sees real-time revenue and overdue receivables instantly. Our UI is 100% bundled offline with zero external CDN dependencies."*
+

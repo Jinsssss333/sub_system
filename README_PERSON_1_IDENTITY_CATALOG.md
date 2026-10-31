@@ -84,3 +84,4 @@ backend/
 
 ## 🎤 What You Explain to Hackathon Judges
 > *"I designed our relational database schema and security core. We enforce strict password hashing with bcrypt, role-based JWT guards, and a 100% offline password reset flow using local SMTP. In the catalog, all currency is modeled in exact integer paise to prevent rounding bugs, and we implemented product variants where the Odoo Edition dynamically applies the ₹560 pricing delta."*
+

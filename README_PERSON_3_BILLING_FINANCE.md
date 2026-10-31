@@ -99,3 +99,4 @@ backend/src/
 
 ## 🎤 What You Explain to Hackathon Judges
 > *"I built the financial core and recurring billing engine. We designed it for total financial integrity: all pricing is computed in integer paise, taxes are levied on net discounted revenue, and double-billing is mathematically prevented using compound database constraints and transactional row locks. Our finance dashboard calculates revenue and overdue receivables using direct SQL aggregations, delivering sub-second response times."*
+

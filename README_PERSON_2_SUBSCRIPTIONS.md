@@ -102,3 +102,4 @@ const allowedTransitions = {
 
 ## 🎤 What You Explain to Hackathon Judges
 > *"I built the Subscription Engine and State Machine. Our system enforces strict, deterministic transitions from Draft Quote to Active Service. I handled edge-case calendar date clamping so renewals never drift, and implemented plan policy flags so only eligible plans can be paused or renewed. When a subscription is renewed, we preserve full audit history by cloning into a new Draft linked via parent pointers."*
+

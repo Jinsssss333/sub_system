@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Search, CreditCard, Printer, Clock } from 'lucide-react';
 import { Invoice, initialInvoices } from '../../api/mockData';
+import { getInvoices, postPayment } from '../../api/client';
+import { useEffect } from 'react';
 import { InvoiceStatusBadge } from '../../components/Badge';
 import { formatINR, formatDate, isOverdue } from '../../utils/formatters';
 import { PaymentModal } from './PaymentModal';
@@ -21,6 +23,12 @@ export function InvoicesPage({
   onRecordPayment,
 }: InvoicesPageProps) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialList);
+
+  useEffect(() => {
+    getInvoices().then((data) => {
+      if (data && data.length > 0) setInvoices(data);
+    });
+  }, []);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
@@ -34,6 +42,7 @@ export function InvoicesPage({
     amount: number;
     note?: string;
   }) => {
+    postPayment(paymentData.invoiceId, paymentData);
     setInvoices((prev) =>
       prev.map((inv) => {
         if (inv.id === paymentData.invoiceId) {

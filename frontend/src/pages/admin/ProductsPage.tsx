@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sparkles, Check, Box } from 'lucide-react';
 import { Product, initialProducts } from '../../api/mockData';
+import { getProducts } from '../../api/client';
 import { formatINR } from '../../utils/formatters';
 
 interface ProductsPageProps {
@@ -8,7 +9,13 @@ interface ProductsPageProps {
 }
 
 export function ProductsPage({ products = initialProducts }: ProductsPageProps) {
-  const [productList] = useState<Product[]>(products);
+  const [productList, setProductList] = useState<Product[]>(products);
+
+  useEffect(() => {
+    getProducts().then((data) => {
+      if (data && data.length > 0) setProductList(data);
+    });
+  }, []);
   const [filterType, setFilterType] = useState<string>('ALL');
 
   const filteredProducts = productList.filter((p) => {

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiRequest, getInvoices } from '../../api/client';
 import { 
   TrendingUp, 
   AlertTriangle, 
@@ -13,13 +14,22 @@ import { InvoiceStatusBadge } from '../../components/Badge';
 import { PrintInvoiceModal } from '../../layouts/PrintInvoiceModal';
 
 export function FinanceDashboard() {
-  const [invoices] = useState<Invoice[]>(initialInvoices);
+  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [activePrintInvoice, setActivePrintInvoice] = useState<Invoice | null>(null);
+  const [metrics, setMetrics] = useState({ activeSubscriptions: 12, revenueCollected: 45000000, outstanding: 12000000, overdueCount: 2 });
 
-  // Compute Live Metrics from Invoices & Seed Data
-  const activeSubscribersCount = 12; // Matching the brief demo target
-  const revenueCollectedPaise = 45000000; // ₹4,50,000.00
-  const totalOutstandingPaise = 12000000;  // ₹1,20,000.00
+  useEffect(() => {
+    apiRequest('/reports/summary').then((res) => {
+      if (res?.data) setMetrics(res.data);
+    }).catch(() => {});
+    getInvoices().then((data) => {
+      if (data && data.length > 0) setInvoices(data);
+    });
+  }, []);
+
+  const activeSubscribersCount = metrics.activeSubscriptions;
+  const revenueCollectedPaise = metrics.revenueCollected;
+  const totalOutstandingPaise = metrics.outstanding;
   
   // Overdue Invoices
   const overdueInvoices = invoices.filter((inv) => isOverdue(inv.dueDate, inv.status));

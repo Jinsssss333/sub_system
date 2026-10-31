@@ -9,6 +9,8 @@ import {
   XCircle 
 } from 'lucide-react';
 import { Subscription, initialSubscriptions } from '../../api/mockData';
+import { getSubscriptions } from '../../api/client';
+import { useEffect } from 'react';
 import { SubscriptionStatusBadge } from '../../components/Badge';
 import { formatINR, formatDate } from '../../utils/formatters';
 
@@ -19,6 +21,15 @@ interface SubscriptionsPageProps {
 export function SubscriptionsPage({ subscriptions: propSubs = initialSubscriptions }: SubscriptionsPageProps) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(propSubs);
   const [selectedSub, setSelectedSub] = useState<Subscription | null>(propSubs[0] || null);
+
+  useEffect(() => {
+    getSubscriptions().then((data) => {
+      if (data && data.length > 0) {
+        setSubscriptions(data);
+        setSelectedSub(data[0]);
+      }
+    });
+  }, []);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 

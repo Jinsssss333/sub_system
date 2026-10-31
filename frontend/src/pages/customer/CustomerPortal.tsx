@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileText, Receipt, Printer, ShieldCheck } from 'lucide-react';
-import { initialSubscriptions, initialInvoices, Invoice } from '../../api/mockData';
+import { initialSubscriptions, initialInvoices, Invoice, Subscription } from '../../api/mockData';
+import { apiRequest } from '../../api/client';
 import { SubscriptionStatusBadge, InvoiceStatusBadge } from '../../components/Badge';
 import { formatINR, formatDate, isOverdue } from '../../utils/formatters';
 import { PrintInvoiceModal } from '../../layouts/PrintInvoiceModal';
@@ -13,12 +14,69 @@ export function CustomerPortal() {
   const customerEmail = 'customer@brightloop.test';
   const customerId = 'cust-1';
 
-  const mySubscriptions = initialSubscriptions.filter(
-    (s) => s.customerId === customerId || s.customerEmail === customerEmail
+  const [mySubscriptions, setMySubscriptions] = useState<Subscription[]>(
+    initialSubscriptions.filter((s) => s.customerId === customerId || s.customerEmail === customerEmail)
   );
-  const myInvoices = initialInvoices.filter(
-    (i) => i.customerId === customerId || i.customerEmail === customerEmail
+  const [myInvoices, setMyInvoices] = useState<Invoice[]>(
+    initialInvoices.filter((i) => i.customerId === customerId || i.customerEmail === customerEmail)
   );
+
+  useEffect(() => {
+    apiRequest('/me/subscriptions').then((res) => {
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        setMySubscriptions(res.data.map((s: any) => ({
+          id: s.id,
+          number: s.number,
+          customerId: s.customerId,
+          customerName: s.customer?.companyName || 'Acme Retail Pvt Ltd',
+          customerEmail: 'customer@brightloop.test',
+          planId: s.planId,
+          planName: s.plan?.name || 'Standard Monthly Plan',
+          status: s.status,
+          startDate: s.startDate,
+          expiryDate: s.expiryDate,
+          paymentTermDays: s.paymentTermDays || 15,
+          nextInvoiceDate: s.nextInvoiceDate,
+          pausedAt: s.pausedAt,
+          lines: (s.lines || []).map((l: any) => ({
+            id: l.id,
+            productId: l.productId,
+            productName: l.product?.name || 'Product',
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            taxRateBps: 1800,
+            amount: l.amount,
+          })),
+        })));
+      }
+    }).catch(() => {});
+
+    apiRequest('/me/invoices').then((res) => {
+      if (res?.data && Array.isArray(res.data) && res.data.length > 0) {
+        setMyInvoices(res.data.map((inv: any) => ({
+          id: inv.id,
+          number: inv.number,
+          subscriptionId: inv.subscriptionId,
+          subscriptionNumber: inv.subscription?.number || '',
+          customerId: inv.customerId,
+          customerName: 'Acme Retail Pvt Ltd',
+          customerEmail: 'customer@brightloop.test',
+          periodStart: inv.periodStart,
+          periodEnd: inv.periodEnd,
+          status: inv.status,
+          subtotal: inv.subtotal,
+          discountTotal: inv.discountTotal || 0,
+          taxTotal: inv.taxTotal,
+          total: inv.total,
+          amountPaid: inv.amountPaid || 0,
+          issueDate: inv.issueDate,
+          dueDate: inv.dueDate,
+          lines: inv.lines || [],
+          payments: inv.payments || [],
+        })));
+      }
+    }).catch(() => {});
+  }, []);
 
   return (
     <div className="space-y-6">

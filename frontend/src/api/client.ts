@@ -69,9 +69,9 @@ export async function authenticateRole(role: 'ADMIN' | 'STAFF' | 'CUSTOMER'): Pr
 
     if (res.ok) {
       const data = await res.json();
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+      if (data.data?.token) {
+        localStorage.setItem('token', data.data.token);
+        localStorage.setItem('user', JSON.stringify(data.data.user));
         return true;
       }
     }
@@ -85,7 +85,7 @@ export async function authenticateRole(role: 'ADMIN' | 'STAFF' | 'CUSTOMER'): Pr
 export async function getProducts(): Promise<Product[]> {
   try {
     const res = await apiRequest('/products');
-    if (res && Array.isArray(res.data)) {
+    if (res && Array.isArray(res.data) && res.data.length > 0) {
       return res.data;
     }
   } catch {
@@ -97,7 +97,7 @@ export async function getProducts(): Promise<Product[]> {
 export async function getPlans(): Promise<Plan[]> {
   try {
     const res = await apiRequest('/plans');
-    if (res && Array.isArray(res.data)) {
+    if (res && Array.isArray(res.data) && res.data.length > 0) {
       return res.data;
     }
   } catch {
@@ -109,7 +109,7 @@ export async function getPlans(): Promise<Plan[]> {
 export async function getDiscounts(): Promise<Discount[]> {
   try {
     const res = await apiRequest('/discounts');
-    if (res && Array.isArray(res.data)) {
+    if (res && Array.isArray(res.data) && res.data.length > 0) {
       return res.data;
     }
   } catch {
@@ -121,8 +121,31 @@ export async function getDiscounts(): Promise<Discount[]> {
 export async function getSubscriptions(): Promise<Subscription[]> {
   try {
     const res = await apiRequest('/subscriptions');
-    if (res && Array.isArray(res.data)) {
-      return res.data;
+    if (res && Array.isArray(res.data) && res.data.length > 0) {
+      return res.data.map((s: any) => ({
+        id: s.id,
+        number: s.number,
+        customerId: s.customerId,
+        customerName: s.customer?.companyName || s.customer?.user?.name || 'Customer',
+        customerEmail: s.customer?.user?.email || '',
+        planId: s.planId,
+        planName: s.plan?.name || 'Plan',
+        status: s.status,
+        startDate: s.startDate,
+        expiryDate: s.expiryDate,
+        paymentTermDays: s.paymentTermDays || 15,
+        nextInvoiceDate: s.nextInvoiceDate,
+        pausedAt: s.pausedAt,
+        lines: (s.lines || []).map((l: any) => ({
+          id: l.id,
+          productId: l.productId,
+          productName: l.product?.name || 'Product',
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          taxRateBps: l.tax?.rateBps || 1800,
+          amount: l.amount,
+        })),
+      }));
     }
   } catch {
     // fallback
@@ -133,8 +156,43 @@ export async function getSubscriptions(): Promise<Subscription[]> {
 export async function getInvoices(): Promise<Invoice[]> {
   try {
     const res = await apiRequest('/invoices');
-    if (res && Array.isArray(res.data)) {
-      return res.data;
+    if (res && Array.isArray(res.data) && res.data.length > 0) {
+      return res.data.map((inv: any) => ({
+        id: inv.id,
+        number: inv.number,
+        subscriptionId: inv.subscriptionId,
+        subscriptionNumber: inv.subscription?.number || '',
+        customerId: inv.customerId,
+        customerName: inv.customer?.companyName || inv.customer?.user?.name || 'Customer',
+        customerEmail: inv.customer?.user?.email || '',
+        periodStart: inv.periodStart,
+        periodEnd: inv.periodEnd,
+        status: inv.status,
+        subtotal: inv.subtotal,
+        discountTotal: inv.discountTotal || 0,
+        taxTotal: inv.taxTotal,
+        total: inv.total,
+        amountPaid: inv.amountPaid || 0,
+        issueDate: inv.issueDate,
+        dueDate: inv.dueDate,
+        lines: (inv.lines || []).map((l: any) => ({
+          id: l.id,
+          description: l.description,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discountAmount: l.discountAmount || 0,
+          taxRateBps: l.taxRateBps || 1800,
+          taxAmount: l.taxAmount,
+          amount: l.amount,
+        })),
+        payments: (inv.payments || []).map((p: any) => ({
+          id: p.id,
+          method: p.method,
+          amount: p.amount,
+          paidOn: p.paidOn,
+          note: p.note,
+        })),
+      }));
     }
   } catch {
     // fallback

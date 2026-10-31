@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { Calendar, Zap } from 'lucide-react';
 import { Plan, initialPlans } from '../../api/mockData';
+import { getPlans } from '../../api/client';
 import { formatINR, formatDate } from '../../utils/formatters';
 import { PolicyBadge } from '../../components/Badge';
 
@@ -7,7 +9,14 @@ interface PlansPageProps {
   plans?: Plan[];
 }
 
-export function PlansPage({ plans = initialPlans }: PlansPageProps) {
+export function PlansPage({ plans: initialList = initialPlans }: PlansPageProps) {
+  const [plans, setPlans] = useState<Plan[]>(initialList);
+
+  useEffect(() => {
+    getPlans().then((data) => {
+      if (data && data.length > 0) setPlans(data);
+    });
+  }, []);
   return (
     <div className="space-y-6">
       {/* Page Header */}

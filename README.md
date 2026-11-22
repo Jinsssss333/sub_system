@@ -3,7 +3,7 @@
 > **A unified, local-first platform running catalog, subscriptions, automated recurring billing, payments, and financial reporting.**  
 > Built for the **Odoo Hackathon** as an enterprise-grade monorepo.
 
----
+----
 
 ## 📑 Table of Contents
 1. [Overview](#-overview)
